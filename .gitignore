@@ -1,0 +1,30 @@
+# Build
+target/
+!.mvn/wrapper/maven-wrapper.jar
+*.jar
+*.war
+*.class
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+nbproject/
+
+# Ambiente
+.env
+*.local
+
+# Logs e temporarios
+*.log
+logs/
+.DS_Store
+Thumbs.db
+
+# Node (OpenSpec CLI)
+node_modules/

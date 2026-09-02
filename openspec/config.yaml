@@ -1,0 +1,92 @@
+schema: spec-driven
+
+# Injetado em TODA requisição de planejamento do OpenSpec.
+# Mantenha enxuto: o que o agente precisa saber sempre, não a documentação inteira.
+# Detalhamento vive em docs/ — os ponteiros estão no fim desta seção.
+context: |
+  PROJETO
+  Backend hospitalar de agendamento e histórico de consultas. Tech Challenge da
+  Fase 3 da Pós Tech FIAP em Arquitetura e Desenvolvimento Java. O que é avaliado:
+  segurança com Spring Security e níveis de acesso, consulta flexível de histórico
+  via GraphQL, e comunicação assíncrona entre serviços via RabbitMQ.
+  Três perfis de usuário: MEDICO, ENFERMEIRO, PACIENTE.
+
+  STACK
+  Java 21 · Spring Boot 3.5.x · Maven multi-módulo com ${revision}
+  PostgreSQL 16 + JPA + Flyway (um database por serviço)
+  RabbitMQ 3.13 + Spring AMQP · Spring Security 6 + JWT HS256 · Spring for GraphQL
+  Testcontainers · JUnit 5 · ArchUnit · JaCoCo · Docker Compose
+
+  MÓDULOS
+  shared-contracts    — envelope de eventos, payloads, topologia RabbitMQ
+  shared-security     — filtro JWT, JwtService, config base do Spring Security
+  agendamento-service :8081 — escrita, REST, autenticação, Clean Architecture, Outbox
+  notificacao-service :8082 — consome eventos, confirmações e lembrete D-1
+  historico-service   :8083 — projeta eventos em read model, expõe GraphQL
+
+  CAPABILITIES (organizam openspec/specs/)
+  autenticacao-e-autorizacao · agendamento-de-consultas · mensageria-de-eventos
+  notificacoes-ao-paciente · historico-de-consultas · operacao-do-ambiente
+
+  CONVENÇÕES DE CÓDIGO
+  Pacote raiz br.com.fiap.hospital.
+  Clean Architecture APENAS no agendamento-service: domain sem Spring/JPA/Jackson/
+  Validation; application com um caso de uso por classe e um método público;
+  infrastructure com todos os adaptadores. Verificado por ArchUnit.
+  Notificação e histórico usam camadas simples — são adaptadores de evento.
+  Records para DTOs. Mapeamento domínio↔entidade manual, sem MapStruct.
+  Clock injetado sempre. Nunca LocalDateTime.now() direto.
+  Erros HTTP em RFC 7807 ProblemDetail com correlationId e timestamp.
+  Schema só muda por migration Flyway. Nunca ddl-auto: update.
+  Mensagens de validação e de erro em português.
+
+  CONVENÇÕES DE TESTE
+  Teste unitário em *Test.java (surefire); integração em *IT.java (failsafe).
+  Infraestrutura em teste é real via Testcontainers. Não mockar broker nem banco.
+  Cobertura mínima 85% global; 90% em domain e application do agendamento.
+  Cada célula da matriz de autorização tem um teste de integração próprio.
+
+  GIT
+  GitFlow completo: feature/<mXX>-<change-id> → develop → release/<versao> → main.
+  Merges sempre --no-ff. Conventional Commits em português.
+  Escopos: agendamento, notificacao, historico, contracts, security, infra, docs, openspec.
+
+  RESTRIÇÕES
+  Sem frontend. Sem provedor real de SMS/e-mail (porta com adaptador log e SMTP/Mailpit).
+  Sem deploy em nuvem — docker compose up é o ambiente de entrega.
+  Sem prontuário eletrônico, prescrição ou faturamento.
+
+  DOCUMENTAÇÃO DE REFERÊNCIA
+  docs/01-arquitetura.md         — arquitetura, Clean Architecture, segurança, erros
+  docs/02-especificacao-funcional.md — RF/RNF, matriz de autorização, modelo de dados
+  docs/03-contrato-de-eventos.md — NORMATIVO: topologia, envelope, outbox, idempotência
+  docs/04-roadmap.md             — as 15 changes, com notas técnicas obrigatórias
+  docs/05-fluxo-de-trabalho.md   — ciclo OpenSpec + GitFlow, releases, DoD
+
+rules:
+  proposal:
+    - O change-id vem de docs/04-roadmap.md. Não invente um novo.
+    - Toda proposta declara a capability afetada, os requisitos RF/RNF que fecha e a release alvo.
+    - Uma proposta cobre uma change do roadmap. Escopo que não está na proposta é outra change.
+    - Declare explicitamente o que NÃO muda nesta change.
+
+  design:
+    - As "notas técnicas obrigatórias" do change em docs/04-roadmap.md precisam aparecer aqui, decididas e justificadas. Se faltar alguma, o design está incompleto.
+    - Registre as alternativas consideradas e por que foram descartadas — vira insumo dos ADRs.
+    - Liste os riscos com a mitigação correspondente.
+
+  specs:
+    - Formato Requirement + Scenario com WHEN/THEN. Um Scenario descreve comportamento observável, nunca implementação.
+    - Todo Scenario precisa ser rastreável a pelo menos um teste automatizado.
+    - Casos negativos (401, 403, 409, 422) são Scenarios de primeira classe, não notas de rodapé.
+    - Deltas usam ADDED, MODIFIED ou REMOVED Requirements. Não reescreva a capability inteira.
+
+  tasks:
+    - Agrupe por área (build, domínio, persistência, API, testes, documentação) e numere.
+    - A última seção é sempre de verificação, com os comandos concretos que provam a entrega.
+    - Documentação afetada (README, ADR, collection Postman) entra como task, não como pós-trabalho.
+
+  apply:
+    - Se a spec não cobrir uma decisão necessária, PARE e pergunte. Não improvise requisito.
+    - Não adiante escopo de changes futuras do roadmap.
+    - Arquivar só depois do merge em develop. openspec/specs/ representa o que está construído e integrado.
