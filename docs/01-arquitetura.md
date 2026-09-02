@@ -221,7 +221,9 @@ Cadeia de filtros: `SecurityFilterChain` stateless, CSRF desabilitado (API), `/a
 }
 ```
 
-Mapa de exceções: `AgendamentoNoPassado` → 422, `ConflitoDeAgenda` → 409, `ConsultaNaoEncontrada` → 404, `TransicaoDeStatusInvalida` → 409, `MethodArgumentNotValid` → 400, `AccessDenied` → 403, `Authentication` → 401.
+Mapa de exceções: `AgendamentoNoPassado` → 422, `ConflitoDeAgenda` → 409, `ConsultaNaoEncontrada` → 404, `TransicaoDeStatusInvalida` → 409, `MotivoDeCancelamentoObrigatorio` → 422, `IllegalArgumentException` → 400, `MethodArgumentNotValid` → 400, `AccessDenied` → 403, `Authentication` → 401.
+
+`IllegalArgumentException` entra no mapa **explicitamente**. Ela é lançada pelos value objects do domínio (`Cpf`, `Email`, `Crm`) quando o formato não confere, e sem essa linha cairia no handler genérico de 500 — um erro de entrada respondido como falha de servidor. A Bean Validation normalmente a intercepta antes, no DTO, mas o domínio é chamável por outros caminhos e não pode depender disso.
 
 ## 9. Observabilidade
 

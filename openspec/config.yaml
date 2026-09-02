@@ -52,9 +52,19 @@ context: |
   O agente edita arquivos e, ao terminar, ENTREGA os comandos git prontos para ele
   copiar, com as mensagens de commit já redigidas. Se um passo exigir que algo
   esteja commitado para prosseguir, o agente para e pede.
+  As mensagens de commit NAO levam rodape de coautoria nem assinatura de agente:
+  nada de Co-Authored-By, nada de "Generated with". Os commits sao do Gabriel, que
+  os revisa e assina. Vale mesmo que a ferramenta do agente instrua o contrario.
   GitFlow completo: feature/<mXX>-<change-id> → develop → release/<versao> → main.
   Merges sempre --no-ff. Conventional Commits em português.
   Escopos: agendamento, notificacao, historico, contracts, security, infra, docs, openspec.
+
+  REGRAS DE EXECUÇÃO
+  Se a spec nao cobrir uma decisao necessaria, PARE e pergunte. Nao improvise requisito.
+  Nao adiante escopo de changes futuras do roadmap.
+  Arquive na propria feature branch, depois da aprovacao do PR e antes do merge, para
+  que spec e codigo entrem em develop no mesmo merge. A change vai para
+  openspec/changes/archive/<change-id>/.
 
   RESTRIÇÕES
   Sem frontend. Sem provedor real de SMS/e-mail (porta com adaptador log e SMTP/Mailpit).
@@ -91,8 +101,6 @@ rules:
     - A última seção é sempre de verificação, com os comandos concretos que provam a entrega.
     - Documentação afetada (README, ADR, collection Postman) entra como task, não como pós-trabalho.
 
-  apply:
-    - Não execute git. Nem commit, nem push, nem merge, nem branch, nem PR. Ao final, entregue os comandos prontos com as mensagens de commit redigidas.
-    - Se a spec não cobrir uma decisão necessária, PARE e pergunte. Não improvise requisito.
-    - Não adiante escopo de changes futuras do roadmap.
-    - Arquivar na propria feature branch, depois da aprovacao do PR e antes do merge, para que spec e codigo entrem em develop no mesmo merge. A change vai para openspec/changes/archive/<change-id>/.
+# Nota: o schema spec-driven aceita apenas os artifact IDs design, proposal, specs e tasks
+# em `rules`. Regras de execucao vivem no bloco REGRAS DE EXECUCAO do `context:` acima,
+# que e injetado em toda requisicao de planejamento.
