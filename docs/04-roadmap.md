@@ -361,7 +361,7 @@ tabela de autorização vira um Scenario e um teste.
 - **A collection inteira roda no Runner, na ordem, sem edição manual.** Se precisa colar token à mão, está errada.
 - Cada request com `pm.test()` assertando status e campos.
 - Diagramas em **Mermaid**, para renderizarem direto no GitHub.
-- ADRs: 001 RabbitMQ vs Kafka · 002 três serviços · 003 monorepo multi-módulo · 004 matriz de autorização (a resolução da ambiguidade do enunciado) · 005 JWT stateless · 006 Transactional Outbox · 007 Clean Architecture só no core. Formato: Contexto / Decisão / Alternativas / Consequências / Status.
+- **Os ADRs são escritos ao longo do projeto**, no change em que a decisão se materializa (ver "Onde cada ADR é escrito", adiante). O M13 **consolida**: revisa os sete, uniformiza o formato (Contexto / Decisão / Alternativas / Consequências / Status), cria o índice em `docs/adr/README.md` e liga cada ADR ao change que o originou.
 
 ---
 
@@ -379,6 +379,22 @@ tabela de autorização vira um Scenario e um teste.
 **➜ Ao fim deste change: abrir `release/1.0.0` e tagear `v1.0.0`.**
 
 ---
+
+## Onde cada ADR é escrito
+
+Um ADR escrito meses depois da decisão vira ficção retrospectiva. Cada um nasce no change que materializa a decisão, com a discussão ainda fresca — o `design.md` daquele change é o rascunho natural.
+
+| ADR | Decisão | Change |
+|---|---|---|
+| ADR-001 | RabbitMQ em vez de Kafka | M05 · `add-event-publishing-outbox` |
+| ADR-002 | Três serviços, com histórico separado | M00 · `bootstrap-monorepo` |
+| ADR-003 | Monorepo Maven multi-módulo | M00 · `bootstrap-monorepo` |
+| ADR-004 | Matriz de autorização e a ambiguidade do enunciado | M04 · `add-autenticacao-jwt` |
+| ADR-005 | JWT stateless em vez de sessão | M04 · `add-autenticacao-jwt` |
+| ADR-006 | Transactional Outbox | M05 · `add-event-publishing-outbox` |
+| ADR-007 | Clean Architecture só no serviço de agendamento | M01 · `add-agendamento-domain` |
+
+Escrever o ADR é **task do change correspondente**, não trabalho de fim de projeto. O M13 apenas consolida.
 
 ## Estimativa
 
