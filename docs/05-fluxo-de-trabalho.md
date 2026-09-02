@@ -111,7 +111,7 @@ git checkout -b release/0.1.0
 #    - subir <revision> no POM pai para 0.1.0
 #    - atualizar CHANGELOG.md
 #    - rodar mvn verify e o smoke test
-#    - verificação do OpenSpec em todas as changes da release
+#    - conferir que openspec/changes/ está vazio e archive/ tem as changes da release
 
 git commit -am "chore(release): prepara versão 0.1.0"
 
@@ -173,10 +173,9 @@ chore(release): prepara versão 0.1.0
 Uma change só é arquivada quando:
 
 1. Todas as tasks de `tasks.md` estão marcadas `[x]`
-2. A verificação do OpenSpec passa (`/opsx:verify`, ou `openspec validate` se o CLI instalado oferecer)
+2. Todos os `#### Scenario:` da spec delta têm teste automatizado correspondente — a conferência é manual, na revisão do PR; não existe comando de verificação nesta versão do OpenSpec
 3. `mvn -q clean verify` passa na raiz, sem teste ignorado
-4. Os cenários da spec delta têm teste correspondente — cada `#### Scenario:` é rastreável a pelo menos um teste
-5. Cobertura do módulo tocado ≥ 80%; global ≥ 85% a partir do M10
+4. Cobertura do módulo tocado ≥ 80%; global ≥ 85% a partir do M10
 6. ArchUnit verde no `agendamento-service`
 7. Documentação afetada atualizada no mesmo PR (README, ADR, Postman)
 8. PR aprovado pelo Gabriel e mergeado em `develop` com `--no-ff`
@@ -187,7 +186,7 @@ Uma change só é arquivada quando:
 ## 7. Quando algo dá errado
 
 **A proposta foi aprovada mas na implementação percebeu-se que o design não fecha.**
-Pare. Atualize `design.md` e, se necessário, o delta de spec. Peça reaprovação. Não implemente diferente do que está escrito — a spec desatualizada é pior do que spec nenhuma, porque dá falsa confiança.
+Pare. Rode `/opsx:update` para revisar a proposta — ele atualiza `design.md` e o delta de spec de forma consistente. Peça reaprovação. Não implemente diferente do que está escrito — a spec desatualizada é pior do que spec nenhuma, porque dá falsa confiança.
 
 **Apareceu escopo novo no meio da feature.**
 Se é pequeno e claramente parte da mesma capability, adicione uma task e registre no `proposal.md`. Se muda o objetivo, é outra change.

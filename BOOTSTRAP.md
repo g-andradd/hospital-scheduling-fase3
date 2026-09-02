@@ -126,13 +126,15 @@ E no Claude Code, o bloco **"Enunciado da proposta"** do change correspondente e
 
 ## Referência rápida das skills OpenSpec
 
-| Skill | Uso |
+Conjunto instalado neste repositório (confirmado em `.claude/commands/opsx/`):
+
+| Comando | Uso |
 |---|---|
 | `/opsx:explore` | Pensar antes de se comprometer com um plano |
 | `/opsx:propose` | Criar a proposta da change (proposal, design, tasks, spec delta) |
+| `/opsx:update` | Revisar uma proposta já criada, quando o design não fecha na implementação |
 | `/opsx:apply` | Implementar a checklist de tasks |
-| `/opsx:continue` | Retomar uma change em andamento |
-| `/opsx:verify` | Verificar a change contra a spec |
-| `/opsx:archive` | Arquivar a change e promover os deltas para `specs/` |
+| `/opsx:archive` | Arquivar a change depois do merge em `develop` |
+| `/opsx:sync` | Sincronizar `openspec/specs/` com as changes arquivadas |
 
-O conjunto exato varia com a versão instalada — confirme com `openspec --help` e com o que aparecer em `.claude/skills/`.
+Não existem `/opsx:verify`, `/opsx:new`, `/opsx:continue` nem `/opsx:ff` nesta versão.
