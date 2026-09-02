@@ -6,7 +6,7 @@
 
 O POM pai declara `<revision>0.1.0-SNAPSHOT</revision>` e todos os módulos usam `<version>${revision}</version>`. Subir a versão do projeto inteiro vira a alteração de uma linha.
 
-Isso exige o `flatten-maven-plugin` — sem ele, o POM publicado carrega o placeholder literal `${revision}` e quebra qualquer consumidor. Configurar com `flattenMode=resolveCiFriendly` e `goal: flatten` na fase `process-resources`, mais `clean` na fase `clean`.
+Isso exige o `flatten-maven-plugin` — sem ele, o POM publicado carrega o placeholder literal `${revision}` e quebra qualquer consumidor. Configurar com `flattenMode=resolveCiFriendliesOnly` e `goal: flatten` na fase `process-resources`, mais `clean` na fase `clean`.
 
 ### Separação surefire / failsafe
 
