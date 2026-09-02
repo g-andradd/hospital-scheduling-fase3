@@ -85,7 +85,7 @@ hospital-scheduling-fase3/
 │   ├── config.yaml                  # contexto + regras, injetados no planejamento
 │   ├── specs/<capability>/spec.md   # o que JÁ está construído
 │   ├── changes/<change-id>/         # propostas em andamento
-│   └── archive/                     # changes concluídas
+│   └── changes/archive/             # changes concluídas
 ├── .claude/                         # skills e comandos do OpenSpec (openspec init)
 ├── postman/
 │   ├── hospital-fase3.postman_collection.json
