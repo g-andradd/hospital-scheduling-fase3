@@ -95,4 +95,4 @@ rules:
     - Não execute git. Nem commit, nem push, nem merge, nem branch, nem PR. Ao final, entregue os comandos prontos com as mensagens de commit redigidas.
     - Se a spec não cobrir uma decisão necessária, PARE e pergunte. Não improvise requisito.
     - Não adiante escopo de changes futuras do roadmap.
-    - Arquivar só depois do merge em develop. openspec/specs/ representa o que está construído e integrado.
+    - Arquivar na propria feature branch, depois da aprovacao do PR e antes do merge, para que spec e codigo entrem em develop no mesmo merge. A change vai para openspec/changes/archive/<change-id>/.

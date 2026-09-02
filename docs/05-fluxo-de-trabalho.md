@@ -56,12 +56,20 @@ Na coluna da direita, **tudo é executado pelo Gabriel**. O Claude Code atua ape
                     ◄── GABRIEL APROVA O PR ──►
                             │
                             ▼
-                       /opsx:archive                   merge --no-ff em develop
-                       move para archive/              apaga a branch
-                       promove deltas p/ specs/        commit: "docs(openspec): arquiva <id>"
+                       /opsx:archive                   commit: "docs(openspec): arquiva <id>"
+                       move p/ changes/archive/        push na feature branch
+                       promove deltas p/ specs/
+                            │
+                            ▼
+                                                    merge --no-ff em develop
+                                                    apaga a branch
 ```
 
-**Ponto importante:** o `/opsx:archive` acontece **depois** do merge em `develop`, nunca antes. `openspec/specs/` representa o que está construído e integrado. Arquivar uma change cujo PR ainda não foi mergeado faz a spec mentir.
+**Quando arquivar:** na própria feature branch, **depois da aprovação do PR e antes do merge**. Assim a promoção da spec e o código que a implementa entram em `develop` no mesmo merge — `openspec/specs/` nunca fica descrevendo algo que não está integrado, nem o inverso. Como bônus, o revisor vê a mudança de spec no mesmo diff do código.
+
+Arquivar **antes** da aprovação faz a spec mentir se o PR for rejeitado ou retrabalhado. Arquivar **depois** do merge obriga a uma branch e um PR só para isso, ou a um commit direto em `develop`, que a proteção de branch bloqueia.
+
+> **Onde o archive coloca a change:** `openspec/changes/archive/<change-id>/`, não `openspec/archive/`. O diretório é criado pela própria skill na primeira vez.
 
 ---
 
@@ -117,7 +125,7 @@ git checkout -b release/0.1.0
 #    - subir <revision> no POM pai para 0.1.0
 #    - atualizar CHANGELOG.md
 #    - rodar mvn verify e o smoke test
-#    - conferir que openspec/changes/ está vazio e archive/ tem as changes da release
+#    - conferir que openspec/changes/ nao tem change ativa e changes/archive/ tem as da release
 
 git commit -am "chore(release): prepara versão 0.1.0"
 
@@ -185,7 +193,7 @@ Uma change só é arquivada quando:
 5. ArchUnit verde no `agendamento-service`
 6. Documentação afetada atualizada no mesmo PR (README, ADR, Postman)
 7. PR aberto, revisado e mergeado em `develop` com `--no-ff` pelo Gabriel
-8. `/opsx:archive` executado pelo Claude Code; o commit resultante é do Gabriel
+8. `/opsx:archive` executado pelo Claude Code na feature branch, após a aprovação do PR e antes do merge; o commit resultante é do Gabriel
 
 > **Changes que mexem em build ou infraestrutura verificam a partir de um clone limpo, não da árvore de trabalho.** Diretório vazio não é versionado, artefato gerado é ignorado e configuração local não viaja — uma verificação feita só no working tree pode passar e o clone do avaliador falhar. Antes de aprovar o PR: `git clone -b <branch> <url> <tmp> && cd <tmp> && mvn clean verify`.
 

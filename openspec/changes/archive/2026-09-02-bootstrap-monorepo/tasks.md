@@ -8,7 +8,7 @@
 - [x] 1.4 Configurar `maven-compiler-plugin` (release 21, `-parameters`)
 - [x] 1.5 Configurar `maven-surefire-plugin` (`*Test.java`) e `maven-failsafe-plugin` (`*IT.java`, goals `integration-test` e `verify`)
 - [x] 1.6 Configurar `jacoco-maven-plugin` (prepare-agent, report) — sem gate de cobertura ainda
-- [x] 1.7 Configurar `flatten-maven-plugin` com `flattenMode=resolveCiFriendly`
+- [x] 1.7 Configurar `flatten-maven-plugin` com `flattenMode=resolveCiFriendliesOnly`
 - [x] 1.8 Declarar os cinco `<module>`
 
 ## 2. Módulos
