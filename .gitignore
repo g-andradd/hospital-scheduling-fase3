@@ -1,5 +1,7 @@
 # Build
 target/
+# Gerado pelo flatten-maven-plugin (resolucao do ${revision})
+.flattened-pom.xml
 !.mvn/wrapper/maven-wrapper.jar
 *.jar
 *.war

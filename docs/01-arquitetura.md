@@ -63,8 +63,15 @@
 hospital-scheduling-fase3/
 ├── pom.xml                          # POM pai — dependencyManagement, plugins, ${revision}
 ├── docker-compose.yml
+├── Makefile                         # up, down, logs, demo, clean
 ├── .env.example
+├── .gitignore
 ├── README.md
+├── docker/
+│   └── postgres/init.sql            # cria os três databases
+├── scripts/
+│   ├── smoke-test.sh                # e2e com o compose no ar
+│   └── auditoria.sh                 # confere cada RF/RNF contra sua evidência
 ├── docs/
 │   ├── 00-project-charter.md
 │   ├── 01-arquitetura.md
@@ -79,7 +86,7 @@ hospital-scheduling-fase3/
 │   ├── specs/<capability>/spec.md   # o que JÁ está construído
 │   ├── changes/<change-id>/         # propostas em andamento
 │   └── archive/                     # changes concluídas
-├── .claude/skills/                  # skills do OpenSpec (geradas por openspec init)
+├── .claude/                         # skills e comandos do OpenSpec (openspec init)
 ├── postman/
 │   ├── hospital-fase3.postman_collection.json
 │   └── hospital-fase3.postman_environment.json

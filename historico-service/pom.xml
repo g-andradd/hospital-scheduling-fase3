@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>br.com.fiap.hospital</groupId>
+        <artifactId>hospital-scheduling-fase3</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>historico-service</artifactId>
+    <packaging>jar</packaging>
+
+    <name>historico-service</name>
+    <description>Servico de historico: projeta eventos em read model e expoe GraphQL</description>
+
+    <dependencies>
+        <!--
+            Prova, no reactor, que os servicos resolvem o modulo compartilhado.
+            shared-security fica de fora ate o M04: trazer o starter de seguranca agora
+            ativaria o auto-config do Spring Security e fecharia os endpoints que o M03
+            especifica como abertos.
+        -->
+        <dependency>
+            <groupId>br.com.fiap.hospital</groupId>
+            <artifactId>shared-contracts</artifactId>
+            <version>${revision}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

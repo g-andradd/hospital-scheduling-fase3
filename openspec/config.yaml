@@ -46,7 +46,12 @@ context: |
   Cobertura mínima 85% global; 90% em domain e application do agendamento.
   Cada célula da matriz de autorização tem um teste de integração próprio.
 
-  GIT
+  GIT — LIMITE DE ATUAÇÃO
+  O agente NUNCA executa git commit, git push, git merge, git tag, git branch nem
+  abre pull request. Essas operações são exclusivamente do Gabriel.
+  O agente edita arquivos e, ao terminar, ENTREGA os comandos git prontos para ele
+  copiar, com as mensagens de commit já redigidas. Se um passo exigir que algo
+  esteja commitado para prosseguir, o agente para e pede.
   GitFlow completo: feature/<mXX>-<change-id> → develop → release/<versao> → main.
   Merges sempre --no-ff. Conventional Commits em português.
   Escopos: agendamento, notificacao, historico, contracts, security, infra, docs, openspec.
@@ -87,6 +92,7 @@ rules:
     - Documentação afetada (README, ADR, collection Postman) entra como task, não como pós-trabalho.
 
   apply:
+    - Não execute git. Nem commit, nem push, nem merge, nem branch, nem PR. Ao final, entregue os comandos prontos com as mensagens de commit redigidas.
     - Se a spec não cobrir uma decisão necessária, PARE e pergunte. Não improvise requisito.
     - Não adiante escopo de changes futuras do roadmap.
     - Arquivar só depois do merge em develop. openspec/specs/ representa o que está construído e integrado.

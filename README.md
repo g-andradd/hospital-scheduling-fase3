@@ -50,22 +50,90 @@ Java 21 · Spring Boot 3.5 · Spring Security + JWT · Spring for GraphQL · Spr
 | [`openspec/specs/`](openspec/specs/) | O que já está construído, por capability |
 | [`openspec/changes/`](openspec/changes/) | Propostas em andamento |
 
-## Como executar
+## Construir o projeto
 
-> Preenchido no M12.
+Requisitos: **JDK 21** e **Maven 3.9+**.
+
+```bash
+mvn clean verify
+```
+
+O POM pai centraliza a versão de todos os módulos na propriedade `revision` — subir a versão
+do projeto inteiro é alterar uma linha. O `flatten-maven-plugin` resolve esse placeholder nos
+POMs publicados, gerando um `.flattened-pom.xml` por módulo (ignorado pelo Git).
+
+Testes são separados por convenção de nome:
+
+| Comando | O que roda |
+|---|---|
+| `mvn test` | apenas `*Test.java` (surefire) — unitários, rápidos, sem container |
+| `mvn verify` | `*Test.java` **e** `*IT.java` (failsafe) — inclui integração com Testcontainers |
+
+## Executar a infraestrutura
+
+Sobe PostgreSQL 16 e RabbitMQ 3.13, que é tudo que os serviços precisam para rodar localmente.
+Os containers das três aplicações entram no M12.
 
 ```bash
 cp .env.example .env
 docker compose up -d
-./scripts/smoke-test.sh
 ```
+
+Aguarde os dois containers ficarem `healthy`:
+
+```bash
+docker compose ps
+```
+
+| Recurso | Endereço | Credenciais padrão |
+|---|---|---|
+| PostgreSQL | `localhost:5432` | `hospital` / `hospital` |
+| RabbitMQ (AMQP) | `localhost:5672` | `hospital` / `hospital` |
+| RabbitMQ Management | http://localhost:15672 | `hospital` / `hospital` |
+
+Portas e credenciais vêm do `.env` — se a 5432 ou a 5672 já estiverem ocupadas na sua máquina,
+altere `POSTGRES_PORT` / `RABBITMQ_PORT` ali, sem tocar no `docker-compose.yml`.
+
+### ⚠️ O `init.sql` só roda com o volume vazio
+
+Os três databases — `agendamento_db`, `notificacao_db` e `historico_db` — são criados por
+[`docker/postgres/init.sql`](docker/postgres/init.sql), montado em `/docker-entrypoint-initdb.d/`.
+
+O entrypoint do Postgres **só executa esse diretório quando o volume de dados está vazio**.
+Depois do primeiro boot, editar o `init.sql` não tem efeito nenhum: um `docker compose restart`
+ou um `docker compose down` seguido de `up` reaproveitam o volume e ignoram o script.
+
+Para reprovisionar do zero é preciso descartar o volume:
+
+```bash
+docker compose down -v && docker compose up -d
+```
+
+O `-v` é a diferença entre "reiniciei o ambiente" e "recriei o ambiente". Sem ele, uma alteração
+no `init.sql` fica invisível e rende uma hora de depuração à toa.
+
+Conferir que os três databases existem:
+
+```bash
+docker exec hospital-postgres psql -U hospital -d postgres -c "\l"
+```
+
+### Derrubar
+
+```bash
+docker compose down      # para os containers, preserva os dados
+docker compose down -v   # remove também os volumes — apaga tudo
+```
+
+## Executar a aplicação completa
+
+> Preenchido no M12.
 
 | Serviço | URL |
 |---|---|
 | Agendamento (Swagger) | http://localhost:8081/swagger-ui.html |
 | Notificações | http://localhost:8082/actuator/health |
 | Histórico (GraphiQL) | http://localhost:8083/graphiql |
-| RabbitMQ Management | http://localhost:15672 |
 | Mailpit | http://localhost:8025 |
 
 ## Metodologia

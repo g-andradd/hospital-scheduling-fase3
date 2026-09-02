@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: agendamento-service
+
+server:
+  port: 8081
