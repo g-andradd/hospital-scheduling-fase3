@@ -4,7 +4,8 @@ import static br.com.fiap.hospital.agendamento.Cenario.consultaExistente;
 import static br.com.fiap.hospital.agendamento.Cenario.daquiA;
 import static br.com.fiap.hospital.agendamento.Cenario.medico;
 import static br.com.fiap.hospital.agendamento.Cenario.paciente;
-import static br.com.fiap.hospital.agendamento.Cenario.relogioFixo;
+import static br.com.fiap.hospital.agendamento.Cenario.AGORA;
+import static br.com.fiap.hospital.agendamento.Cenario.relogioEm;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -18,7 +19,9 @@ import br.com.fiap.hospital.agendamento.domain.exception.MotivoDeCancelamentoObr
 import br.com.fiap.hospital.agendamento.domain.exception.TransicaoDeStatusInvalidaException;
 import br.com.fiap.hospital.agendamento.fake.ConsultaRepositoryFake;
 import br.com.fiap.hospital.agendamento.fake.EventPublisherFake;
+import java.time.OffsetDateTime;
 import java.util.UUID;
+import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -30,6 +33,12 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 @DisplayName("Confirmacao e cancelamento de consulta")
 class CicloDeVidaDaConsultaUseCaseTest {
+
+    /**
+     * Uma hora a frente do instante em que as consultas do cenario foram criadas, para
+     * que {@code atualizadoEm} distinga mutacao de nao-mutacao nos caminhos negativos.
+     */
+    private static final OffsetDateTime QUANDO_OPERA = AGORA.plusHours(1);
 
     private ConsultaRepositoryFake consultas;
     private EventPublisherFake eventos;
@@ -45,14 +54,32 @@ class CicloDeVidaDaConsultaUseCaseTest {
         joao = medico();
         consultas = new ConsultaRepositoryFake();
         eventos = new EventPublisherFake();
-        confirmar = new ConfirmarConsultaUseCase(consultas, eventos, relogioFixo());
-        cancelar = new CancelarConsultaUseCase(consultas, eventos, relogioFixo());
+        confirmar = new ConfirmarConsultaUseCase(consultas, eventos, relogioEm(QUANDO_OPERA));
+        cancelar = new CancelarConsultaUseCase(consultas, eventos, relogioEm(QUANDO_OPERA));
     }
 
     private Consulta existenteEm(StatusConsulta status) {
         Consulta consulta = consultaExistente(maria, joao, daquiA(24), status);
         consultas.com(consulta);
         return consulta;
+    }
+
+    /**
+     * Todo caminho negativo verifica o que NAO aconteceu. Foi a ausencia dessa
+     * verificacao no caso de uso de alteracao que deixou passar mutacao antes da
+     * validacao — defeito que sob JPA viraria escrita no flush da transacao.
+     */
+    private void assertConsultaIntacta(Consulta antes) {
+        Consulta depois = consultas.buscarPorId(antes.id()).orElseThrow();
+        SoftAssertions.assertSoftly(macio -> {
+            macio.assertThat(depois.status()).as("status").isEqualTo(antes.status());
+            macio.assertThat(depois.periodo()).as("periodo").isEqualTo(antes.periodo());
+            macio.assertThat(depois.motivoCancelamento())
+                    .as("motivo de cancelamento")
+                    .isEqualTo(antes.motivoCancelamento());
+            macio.assertThat(depois.atualizadoEm()).as("atualizadoEm").isEqualTo(AGORA);
+            macio.assertThat(eventos.nadaPublicado()).as("nenhum evento publicado").isTrue();
+        });
     }
 
     @Nested
@@ -67,6 +94,7 @@ class CicloDeVidaDaConsultaUseCaseTest {
             ConsultaResumo resumo = confirmar.executar(consulta.id());
 
             assertThat(resumo.status()).isEqualTo(StatusConsulta.CONFIRMADA);
+            assertThat(resumo.atualizadoEm()).isEqualTo(QUANDO_OPERA);
             assertThat(eventos.tipos()).containsExactly(TipoEventoConsulta.CONFIRMADA);
         }
 
@@ -77,7 +105,7 @@ class CicloDeVidaDaConsultaUseCaseTest {
 
             assertThatThrownBy(() -> confirmar.executar(consulta.id()))
                     .isInstanceOf(TransicaoDeStatusInvalidaException.class);
-            assertThat(eventos.nadaPublicado()).isTrue();
+            assertConsultaIntacta(consulta);
         }
 
         @Test
@@ -87,7 +115,7 @@ class CicloDeVidaDaConsultaUseCaseTest {
 
             assertThatThrownBy(() -> confirmar.executar(consulta.id()))
                     .isInstanceOf(TransicaoDeStatusInvalidaException.class);
-            assertThat(eventos.nadaPublicado()).isTrue();
+            assertConsultaIntacta(consulta);
         }
 
         @Test
@@ -127,9 +155,7 @@ class CicloDeVidaDaConsultaUseCaseTest {
                             new CancelarConsultaCommand(consulta.id(), motivoAusente)))
                     .isInstanceOf(MotivoDeCancelamentoObrigatorioException.class);
 
-            assertThat(consultas.buscarPorId(consulta.id()).orElseThrow().status())
-                    .isEqualTo(StatusConsulta.AGENDADA);
-            assertThat(eventos.nadaPublicado()).isTrue();
+            assertConsultaIntacta(consulta);
         }
 
         @Test
@@ -140,7 +166,7 @@ class CicloDeVidaDaConsultaUseCaseTest {
             assertThatThrownBy(() -> cancelar.executar(
                             new CancelarConsultaCommand(consulta.id(), "motivo")))
                     .isInstanceOf(TransicaoDeStatusInvalidaException.class);
-            assertThat(eventos.nadaPublicado()).isTrue();
+            assertConsultaIntacta(consulta);
         }
 
         @Test
@@ -151,6 +177,7 @@ class CicloDeVidaDaConsultaUseCaseTest {
             assertThatThrownBy(() -> cancelar.executar(
                             new CancelarConsultaCommand(consulta.id(), "motivo")))
                     .isInstanceOf(TransicaoDeStatusInvalidaException.class);
+            assertConsultaIntacta(consulta);
         }
 
         @Test
