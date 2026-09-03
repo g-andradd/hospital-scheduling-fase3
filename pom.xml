@@ -24,6 +24,15 @@
 
         <spring-boot.version>3.5.7</spring-boot.version>
 
+        <!--
+            Sobrepoe a versao gerenciada pelo Spring Boot. O Docker Engine 29 recusa
+            versoes de API abaixo de 1.44, e o docker-java empacotado no Testcontainers
+            1.21.3 negocia uma anterior: toda chamada a /info volta HTTP 400 e nenhum
+            container sobe. Variavel de ambiente nao contorna, porque a estrategia de
+            conexao monta a propria configuracao.
+        -->
+        <testcontainers.version>1.21.4</testcontainers.version>
+
         <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
         <maven-dependency-plugin.version>3.6.1</maven-dependency-plugin.version>
         <maven-surefire-plugin.version>3.2.5</maven-surefire-plugin.version>
@@ -42,6 +51,19 @@
 
     <dependencyManagement>
         <dependencies>
+            <!--
+                Importado ANTES do spring-boot-dependencies: com BOM importado, e nao
+                herdado, sobrepor a property nao muda a versao resolvida — quem declara
+                primeiro vence.
+            -->
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
             <dependency>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-dependencies</artifactId>
