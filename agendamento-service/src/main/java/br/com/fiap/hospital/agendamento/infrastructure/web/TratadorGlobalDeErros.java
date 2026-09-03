@@ -129,7 +129,6 @@ public class TratadorGlobalDeErros extends ResponseEntityExceptionHandler {
         }
 
         ProblemDetail corpo = ProblemDetail.forStatus(TipoDeErro.VALIDACAO_DE_CAMPOS.status());
-        corpo.setDetail("A requisicao contem " + campos.size() + " campo(s) invalido(s)");
         corpo.setProperty("campos", campos);
 
         return handleExceptionInternal(e, corpo, cabecalhos, status, requisicao);
@@ -156,9 +155,9 @@ public class TratadorGlobalDeErros extends ResponseEntityExceptionHandler {
 
         problema.setType(tipo.type());
         problema.setTitle(tipo.titulo());
-        if (problema.getDetail() == null || problema.getDetail().isBlank()) {
-            problema.setDetail(detalheSeguro(e, status));
-        }
+        // Substitui, nao complementa: o Spring ja preenche um detail proprio, derivado
+        // da excecao, e e justamente ele que nao pode chegar ao cliente.
+        problema.setDetail(detalheSeguro(e, status));
         enriquecer(problema, servletDe(requisicao));
 
         return super.handleExceptionInternal(e, problema, cabecalhos, status, requisicao);
@@ -200,14 +199,48 @@ public class TratadorGlobalDeErros extends ResponseEntityExceptionHandler {
     }
 
     /**
-     * Mensagem do Spring so vaza para o cliente em 4xx, onde ela e util e nao expoe
-     * interno. Em 5xx a mensagem e generica.
+     * Detalhe estavel por categoria, nunca derivado da mensagem do framework.
+     *
+     * <p>A versao anterior devolvia {@code e.getMessage()} cru em 4xx, o que expunha
+     * tipo Java e nome de classe ao cliente: um UUID invalido no path respondia algo
+     * como "Failed to convert value of type String to required type java.util.UUID".
+     * A spec exige que <b>nenhuma</b> resposta de erro exponha detalhe interno de
+     * implementacao — nao apenas as de 5xx.
+     *
+     * <p>Os unicos dados da excecao que entram aqui sao nomes de parametro e metodo
+     * HTTP, que fazem parte do contrato publico da API e nao revelam nada de dentro.
      */
     private static String detalheSeguro(Exception e, HttpStatusCode status) {
         if (status.is5xxServerError()) {
             return "Erro interno ao processar a requisicao. Informe o correlationId ao suporte";
         }
-        return e.getMessage() == null ? "Requisicao invalida" : e.getMessage();
+        if (e instanceof MethodArgumentNotValidException invalida) {
+            return "A requisicao contem " + invalida.getBindingResult().getFieldErrorCount()
+                    + " campo(s) invalido(s)";
+        }
+        if (e instanceof MethodArgumentTypeMismatchException incompativel) {
+            return "Valor nao permitido para o parametro '" + incompativel.getName() + "'";
+        }
+        if (e instanceof org.springframework.beans.TypeMismatchException) {
+            return "Valor nao permitido para um dos parametros da requisicao";
+        }
+        if (e instanceof HttpMessageNotReadableException) {
+            return "Corpo da requisicao malformado ou ausente";
+        }
+        if (e instanceof MissingServletRequestParameterException ausente) {
+            return "Parametro obrigatorio ausente: '" + ausente.getParameterName() + "'";
+        }
+        if (e instanceof HttpRequestMethodNotSupportedException metodo) {
+            return "Metodo " + metodo.getMethod() + " nao suportado neste recurso";
+        }
+        if (e instanceof HttpMediaTypeNotSupportedException) {
+            return "Tipo de midia nao suportado. Use application/json";
+        }
+        if (e instanceof NoHandlerFoundException
+                || e instanceof org.springframework.web.servlet.resource.NoResourceFoundException) {
+            return "Rota nao encontrada";
+        }
+        return "Requisicao invalida";
     }
 
     // -------------------------------------------------------------- fallback
