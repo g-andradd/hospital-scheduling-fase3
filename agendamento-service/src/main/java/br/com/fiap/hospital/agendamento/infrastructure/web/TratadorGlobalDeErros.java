@@ -1,5 +1,6 @@
 package br.com.fiap.hospital.agendamento.infrastructure.web;
 
+import br.com.fiap.hospital.agendamento.domain.exception.AgendamentoForaDoHorizonteException;
 import br.com.fiap.hospital.agendamento.domain.exception.AgendamentoNoPassadoException;
 import br.com.fiap.hospital.agendamento.domain.exception.AlteracaoConcorrenteException;
 import br.com.fiap.hospital.agendamento.domain.exception.ConflitoDeAgendaException;
@@ -9,6 +10,7 @@ import br.com.fiap.hospital.agendamento.domain.exception.TransicaoDeStatusInvali
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.time.Clock;
+import java.time.DateTimeException;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -66,6 +68,12 @@ public class TratadorGlobalDeErros extends ResponseEntityExceptionHandler {
     public ProblemDetail agendamentoNoPassado(
             AgendamentoNoPassadoException e, HttpServletRequest requisicao) {
         return problema(TipoDeErro.AGENDAMENTO_NO_PASSADO, e.getMessage(), requisicao);
+    }
+
+    @ExceptionHandler(AgendamentoForaDoHorizonteException.class)
+    public ProblemDetail agendamentoForaDoHorizonte(
+            AgendamentoForaDoHorizonteException e, HttpServletRequest requisicao) {
+        return problema(TipoDeErro.AGENDAMENTO_FORA_DO_HORIZONTE, e.getMessage(), requisicao);
     }
 
     @ExceptionHandler(ConflitoDeAgendaException.class)
@@ -244,6 +252,22 @@ public class TratadorGlobalDeErros extends ResponseEntityExceptionHandler {
     }
 
     // -------------------------------------------------------------- fallback
+
+    /**
+     * Rede de seguranca da aritmetica de data.
+     *
+     * <p>O horizonte de agendamento ja recusa datas absurdas antes de chegarem aqui.
+     * Este tratador cobre qualquer outro caminho que estoure calculo de data — soma de
+     * duracao, conversao de fuso — para que continue sendo 400 e nao 500. O detalhe e
+     * estavel: a mensagem do JDK cita tipo e campo internos.
+     */
+    @ExceptionHandler(DateTimeException.class)
+    public ProblemDetail dataForaDoIntervalo(DateTimeException e, HttpServletRequest requisicao) {
+        return problema(
+                TipoDeErro.DATA_FORA_DO_INTERVALO,
+                "Data ou hora fora do intervalo suportado",
+                requisicao);
+    }
 
     /**
      * Rede de seguranca do que nao e nem dominio nem MVC. Registra a causa no log, com

@@ -115,6 +115,27 @@ class EntradasHostisIT {
     private static final String MALFORMADO = "nao-e-um-uuid";
     private static final String FUTURO = "2030-01-01T10:00:00-03:00";
 
+    /**
+     * Bordas de data e hora.
+     *
+     * <p>A primeira versao desta tabela nao tinha nenhuma, e por isso nao pegou o quinto
+     * defeito da mesma familia: data absurda atravessava o dominio e so estourava na
+     * aritmetica, virando 500. Todo campo de data e hora dos endpoints passa por elas.
+     */
+    private static final List<String> DATAS_HOSTIS = List.of(
+            "+999999999-12-31T23:59:59.999999999-18:00",  // OffsetDateTime.MAX
+            "-999999999-01-01T00:00:00+18:00",            // OffsetDateTime.MIN
+            "0000-01-01T00:00:00Z",                       // ano zero
+            "999999999-12-31T23:59:59Z",                  // ano maximo
+            "9999-12-31T23:59:59Z",                       // muito alem do horizonte
+            "2020-01-01T10:00:00-03:00",                  // passado
+            "2029-12-31T10:00:00-03:00",                  // logo alem dos 24 meses
+            "2026-02-30T10:00:00-03:00",                  // dia inexistente
+            "2026-13-01T10:00:00-03:00",                  // mes inexistente
+            "2026-09-10T25:00:00-03:00",                  // hora inexistente
+            "2026-09-10T10:00:00+99:00",                  // offset impossivel
+            "");
+
     Stream<Ataque> ataques() {
         List<Ataque> casos = new ArrayList<>();
 
@@ -168,6 +189,19 @@ class EntradasHostisIT {
                 "{\"motivo\": \"   \"}", "{\"motivo\": 42}")) {
             casos.add(new Ataque("PATCH cancelar com corpo " + resumo(corpo), HttpMethod.PATCH,
                     "/api/v1/consultas/" + consultaId + "/cancelar", corpo));
+        }
+
+        // --- bordas de data e hora em todo campo que as aceita
+        for (String data : DATAS_HOSTIS) {
+            casos.add(new Ataque("POST com dataHora=" + resumo(data), HttpMethod.POST,
+                    "/api/v1/consultas", registro("%s", "%s", "%s", data, null)));
+            casos.add(new Ataque("PUT com dataHora=" + resumo(data), HttpMethod.PUT,
+                    "/api/v1/consultas/" + consultaId,
+                    "{\"dataHora\":\"" + data + "\"}"));
+            casos.add(new Ataque("GET lista com de=" + resumo(data), HttpMethod.GET,
+                    "/api/v1/consultas?de=" + data.replace("+", "%2B"), null));
+            casos.add(new Ataque("GET lista com ate=" + resumo(data), HttpMethod.GET,
+                    "/api/v1/consultas?ate=" + data.replace("+", "%2B"), null));
         }
 
         // --- parametros de consulta: enum, data, numeros de borda, uuid

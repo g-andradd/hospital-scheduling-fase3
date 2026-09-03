@@ -21,6 +21,10 @@ public enum TipoDeErro {
     AGENDAMENTO_NO_PASSADO(
             "agendamento-no-passado", "Agendamento no passado", HttpStatus.UNPROCESSABLE_ENTITY),
 
+    AGENDAMENTO_FORA_DO_HORIZONTE(
+            "agendamento-fora-do-horizonte", "Agendamento fora do horizonte",
+            HttpStatus.UNPROCESSABLE_ENTITY),
+
     CONFLITO_DE_AGENDA(
             "conflito-de-agenda", "Conflito de agenda", HttpStatus.CONFLICT),
 
@@ -70,6 +74,10 @@ public enum TipoDeErro {
      * virar 500. Erro do cliente respondido como falha de servidor e o defeito que esta
      * categoria elimina.
      */
+    DATA_FORA_DO_INTERVALO(
+            "data-fora-do-intervalo", "Data ou hora fora do intervalo suportado",
+            HttpStatus.BAD_REQUEST),
+
     REQUISICAO_INVALIDA(
             "requisicao-invalida", "Requisicao invalida", HttpStatus.BAD_REQUEST),
 

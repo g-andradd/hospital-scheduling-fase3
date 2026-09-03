@@ -1,5 +1,6 @@
 package br.com.fiap.hospital.agendamento.domain;
 
+import br.com.fiap.hospital.agendamento.domain.exception.AgendamentoForaDoHorizonteException;
 import br.com.fiap.hospital.agendamento.domain.exception.AgendamentoNoPassadoException;
 import br.com.fiap.hospital.agendamento.domain.exception.MotivoDeCancelamentoObrigatorioException;
 import br.com.fiap.hospital.agendamento.domain.exception.TransicaoDeStatusInvalidaException;
@@ -22,6 +23,16 @@ import java.util.UUID;
 public class Consulta {
 
     public static final int DURACAO_PADRAO_MINUTOS = 30;
+
+    /**
+     * Ate quando o futuro e agendavel.
+     *
+     * <p>Decisao de produto, nao limite tecnico: agenda hospitalar nao se planeja com
+     * mais de dois anos, e um pedido alem disso e quase sempre erro de digitacao no ano.
+     * O limite tambem fecha uma classe inteira de falha — sem teto, uma data no ano
+     * 999999999 atravessa o dominio e so estoura na aritmetica de data, virando 500.
+     */
+    public static final int HORIZONTE_MAXIMO_MESES = 24;
 
     private final UUID id;
     private final UUID pacienteId;
@@ -207,6 +218,20 @@ public class Consulta {
     private static void exigirPeriodoFuturo(PeriodoConsulta periodo, OffsetDateTime agora) {
         if (!periodo.comecaDepoisDe(agora)) {
             throw new AgendamentoNoPassadoException(periodo.inicio(), agora);
+        }
+        exigirDentroDoHorizonte(periodo, agora);
+    }
+
+    /**
+     * O limite e calculado a partir de {@code agora}, nunca do periodo pedido: somar
+     * meses a uma data ja proxima do fim do calendario estouraria a propria aritmetica
+     * que esta verificacao existe para evitar.
+     */
+    private static void exigirDentroDoHorizonte(PeriodoConsulta periodo, OffsetDateTime agora) {
+        OffsetDateTime limite = agora.plusMonths(HORIZONTE_MAXIMO_MESES);
+        if (periodo.inicio().isAfter(limite)) {
+            throw new AgendamentoForaDoHorizonteException(
+                    periodo.inicio(), limite, HORIZONTE_MAXIMO_MESES);
         }
     }
 
