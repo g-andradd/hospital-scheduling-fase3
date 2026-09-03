@@ -266,6 +266,92 @@ class ConsultaControllerTest {
     }
 
     @Nested
+    @DisplayName("erros de requisicao do Spring MVC")
+    class ErrosDeRequisicao {
+
+        @Test
+        @DisplayName("Scenario: JSON malformado → 400, nao 500")
+        void jsonMalformado() throws Exception {
+            mvc.perform(post("/api/v1/consultas")
+                            .contentType("application/json")
+                            .content("{\"pacienteId\": "))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.type")
+                            .value("https://hospital.fiap.br/erros/requisicao-malformada"))
+                    .andExpect(jsonPath("$.correlationId").isNotEmpty())
+                    .andExpect(jsonPath("$.timestamp").isNotEmpty());
+        }
+
+        @Test
+        @DisplayName("Scenario: UUID invalido no path → 400, nao 500")
+        void uuidInvalidoNoPath() throws Exception {
+            mvc.perform(get("/api/v1/consultas/nao-e-um-uuid"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.type")
+                            .value("https://hospital.fiap.br/erros/parametro-invalido"))
+                    .andExpect(jsonPath("$.correlationId").isNotEmpty());
+        }
+
+        @Test
+        @DisplayName("Scenario: enum invalido em query param → 400, nao 500")
+        void enumInvalidoEmQueryParam() throws Exception {
+            mvc.perform(get("/api/v1/consultas").param("status", "NAO_EXISTE"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.type")
+                            .value("https://hospital.fiap.br/erros/parametro-invalido"));
+        }
+
+        @Test
+        @DisplayName("Scenario: metodo nao suportado → 405, nao 500")
+        void metodoNaoSuportado() throws Exception {
+            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                            .delete("/api/v1/consultas/" + ID))
+                    .andExpect(status().isMethodNotAllowed())
+                    .andExpect(jsonPath("$.type")
+                            .value("https://hospital.fiap.br/erros/metodo-nao-suportado"))
+                    .andExpect(jsonPath("$.correlationId").isNotEmpty());
+        }
+
+        @Test
+        @DisplayName("Scenario: tipo de midia nao suportado → 415, nao 500")
+        void midiaNaoSuportada() throws Exception {
+            mvc.perform(post("/api/v1/consultas")
+                            .contentType("text/plain")
+                            .content("qualquer coisa"))
+                    .andExpect(status().isUnsupportedMediaType())
+                    .andExpect(jsonPath("$.type")
+                            .value("https://hospital.fiap.br/erros/midia-nao-suportada"));
+        }
+
+        @Test
+        @DisplayName("Scenario: corpo ausente onde e obrigatorio → 400, nao 500")
+        void corpoAusente() throws Exception {
+            mvc.perform(patch("/api/v1/consultas/" + ID + "/cancelar")
+                            .contentType("application/json"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.type")
+                            .value("https://hospital.fiap.br/erros/requisicao-malformada"));
+        }
+
+        @Test
+        @DisplayName("Scenario: data em formato invalido → 400, nao 500")
+        void dataEmFormatoInvalido() throws Exception {
+            mvc.perform(get("/api/v1/consultas").param("de", "10/09/2026"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.type")
+                            .value("https://hospital.fiap.br/erros/parametro-invalido"));
+        }
+
+        @Test
+        @DisplayName("nenhuma delas expoe nome de classe interna")
+        void nenhumaExpoeInterno() throws Exception {
+            mvc.perform(get("/api/v1/consultas/nao-e-um-uuid"))
+                    .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.not(
+                            org.hamcrest.Matchers.containsString("org.springframework"))));
+        }
+    }
+
+    @Nested
     @DisplayName("mapa de erros — uma entrada por teste")
     class Erros {
 

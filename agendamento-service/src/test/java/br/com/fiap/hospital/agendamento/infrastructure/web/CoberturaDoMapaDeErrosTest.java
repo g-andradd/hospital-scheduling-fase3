@@ -78,15 +78,24 @@ class CoberturaDoMapaDeErrosTest {
     }
 
     @Test
-    @DisplayName("as entradas do Spring e do JDK tambem tem tratador")
-    void entradasDeForaDoDominioTemTratador() {
-        Set<Class<?>> tratadas = excecoesComTratador();
+    @DisplayName("as entradas do JDK tem tratador nominal no advice")
+    void entradasDoJdkTemTratadorNominal() {
+        assertThat(excecoesComTratador())
+                .contains(IllegalArgumentException.class, Exception.class);
+    }
 
-        assertThat(tratadas)
-                .contains(
-                        IllegalArgumentException.class,
-                        org.springframework.web.bind.MethodArgumentNotValidException.class,
-                        Exception.class);
+    @Test
+    @DisplayName("a validacao de corpo e coberta pela familia do MVC, com os campos preservados")
+    void validacaoDeCorpoECoberta() {
+        Class<?> validacao = org.springframework.web.bind.MethodArgumentNotValidException.class;
+
+        assertThat(cobertaPeloAdvice(validacao))
+                .as("herdada da superclasse, e nao mais um @ExceptionHandler proprio")
+                .isTrue();
+        assertThat(Arrays.stream(TratadorGlobalDeErros.class.getDeclaredMethods())
+                        .anyMatch(m -> m.getName().equals("handleMethodArgumentNotValid")))
+                .as("o override e o que acrescenta a relacao de campos invalidos ao corpo")
+                .isTrue();
     }
 
     @ParameterizedTest
@@ -115,6 +124,95 @@ class CoberturaDoMapaDeErrosTest {
     void nenhumTypeSeRepete() {
         assertThat(Arrays.stream(TipoDeErro.values()).map(TipoDeErro::type).toList())
                 .doesNotHaveDuplicates();
+    }
+
+    @Test
+    @DisplayName("o advice herda o tratamento da familia de excecoes do Spring MVC")
+    void herdaOTratamentoDoSpringMvc() {
+        assertThat(org.springframework.web.servlet.mvc.method.annotation
+                        .ResponseEntityExceptionHandler.class)
+                .as("sem herdar, JSON malformado, UUID invalido no path e metodo nao "
+                        + "suportado caem no tratador generico e viram 500 — erro de "
+                        + "cliente respondido como falha de servidor")
+                .isAssignableFrom(TratadorGlobalDeErros.class);
+    }
+
+    @Test
+    @DisplayName("o formato do ProblemDetail e imposto tambem as excecoes do MVC")
+    void formatoImpostoAsExcecoesDoMvc() {
+        boolean sobrescreve = Arrays.stream(TratadorGlobalDeErros.class.getDeclaredMethods())
+                .anyMatch(m -> m.getName().equals("handleExceptionInternal"));
+
+        assertThat(sobrescreve)
+                .as("sem sobrescrever handleExceptionInternal, as respostas herdadas saem "
+                        + "sem type, correlationId nem timestamp")
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("toda excecao de MVC tratada pela superclasse esta coberta")
+    void todaExcecaoDeMvcEstaCoberta() {
+        List<Class<?>> semCobertura = excecoesDoSpringMvc().stream()
+                .filter(excecao -> !cobertaPeloAdvice(excecao))
+                .toList();
+
+        assertThat(semCobertura)
+                .as("excecao de requisicao sem cobertura vira 500")
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("a varredura do MVC encontra as excecoes esperadas")
+    void varreduraDoMvcEncontraExcecoes() {
+        assertThat(excecoesDoSpringMvc())
+                .as("se vier vazia, o teste acima passaria a nao verificar nada")
+                .hasSizeGreaterThanOrEqualTo(8)
+                .anyMatch(c -> c.getSimpleName().equals("HttpMessageNotReadableException"))
+                .anyMatch(c -> c.getSimpleName().equals("HttpRequestMethodNotSupportedException"));
+    }
+
+    @Test
+    @DisplayName("as categorias de requisicao invalida sao todas 4xx")
+    void categoriasDeRequisicaoSao4xx() {
+        List<TipoDeErro> deRequisicao = List.of(
+                TipoDeErro.REQUISICAO_MALFORMADA,
+                TipoDeErro.PARAMETRO_INVALIDO,
+                TipoDeErro.PARAMETRO_AUSENTE,
+                TipoDeErro.METODO_NAO_SUPORTADO,
+                TipoDeErro.MIDIA_NAO_SUPORTADA,
+                TipoDeErro.ROTA_NAO_ENCONTRADA,
+                TipoDeErro.REQUISICAO_INVALIDA);
+
+        assertThat(deRequisicao)
+                .allSatisfy(tipo -> assertThat(tipo.status().is4xxClientError())
+                        .as("%s precisa ser 4xx: e erro do cliente", tipo)
+                        .isTrue());
+    }
+
+    /**
+     * Uma excecao de MVC esta coberta se o advice a trata nominalmente ou se herda o
+     * tratamento da superclasse.
+     */
+    private static boolean cobertaPeloAdvice(Class<?> excecao) {
+        if (!org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler
+                .class.isAssignableFrom(TratadorGlobalDeErros.class)) {
+            return false;
+        }
+        return excecoesComTratador().stream().anyMatch(t -> t.isAssignableFrom(excecao))
+                || excecoesDoSpringMvc().contains(excecao);
+    }
+
+    /** Excecoes declaradas no {@code @ExceptionHandler} da superclasse do Spring. */
+    private static List<Class<?>> excecoesDoSpringMvc() {
+        return Arrays.stream(
+                        org.springframework.web.servlet.mvc.method.annotation
+                                .ResponseEntityExceptionHandler.class.getDeclaredMethods())
+                .map(m -> m.getAnnotation(ExceptionHandler.class))
+                .filter(java.util.Objects::nonNull)
+                .flatMap(anotacao -> Arrays.stream(anotacao.value()))
+                .distinct()
+                .<Class<?>>map(c -> c)
+                .toList();
     }
 
     /** Tipos de excecao declarados em algum {@code @ExceptionHandler} do advice. */

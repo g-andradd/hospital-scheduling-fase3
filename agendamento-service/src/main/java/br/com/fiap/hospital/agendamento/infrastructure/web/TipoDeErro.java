@@ -43,6 +43,36 @@ public enum TipoDeErro {
     VALIDACAO_DE_CAMPOS(
             "validacao-de-campos", "Campos invalidos", HttpStatus.BAD_REQUEST),
 
+    REQUISICAO_MALFORMADA(
+            "requisicao-malformada", "Requisicao malformada", HttpStatus.BAD_REQUEST),
+
+    PARAMETRO_INVALIDO(
+            "parametro-invalido", "Parametro invalido", HttpStatus.BAD_REQUEST),
+
+    PARAMETRO_AUSENTE(
+            "parametro-ausente", "Parametro obrigatorio ausente", HttpStatus.BAD_REQUEST),
+
+    METODO_NAO_SUPORTADO(
+            "metodo-nao-suportado", "Metodo nao suportado", HttpStatus.METHOD_NOT_ALLOWED),
+
+    MIDIA_NAO_SUPORTADA(
+            "midia-nao-suportada", "Tipo de midia nao suportado",
+            HttpStatus.UNSUPPORTED_MEDIA_TYPE),
+
+    ROTA_NAO_ENCONTRADA(
+            "rota-nao-encontrada", "Rota nao encontrada", HttpStatus.NOT_FOUND),
+
+    /**
+     * Rede de seguranca para as demais falhas de requisicao do Spring MVC.
+     *
+     * <p>Existe para que uma excecao de MVC ainda nao mapeada nominalmente continue
+     * saindo como 4xx com corpo Problem Detail, em vez de cair no tratador generico e
+     * virar 500. Erro do cliente respondido como falha de servidor e o defeito que esta
+     * categoria elimina.
+     */
+    REQUISICAO_INVALIDA(
+            "requisicao-invalida", "Requisicao invalida", HttpStatus.BAD_REQUEST),
+
     ERRO_INTERNO(
             "erro-interno", "Erro interno", HttpStatus.INTERNAL_SERVER_ERROR);
 
