@@ -105,8 +105,32 @@ public class Consulta {
     }
 
     /**
-     * Altera periodo, medico e observacoes. Passar {@code null} em periodo ou medico
-     * mantem o valor atual.
+     * Aplica as validacoes de alteracao <b>sem mutar nada</b>.
+     *
+     * <p>Existe para que o caso de uso possa validar tudo — inclusive o conflito de
+     * agenda, que ele checa por fora — antes de qualquer escrita no agregado. Sem
+     * isso, uma alteracao recusada deixaria a consulta ja modificada em memoria, e sob
+     * JPA a entidade gerenciada sofreria flush no commit: a alteracao rejeitada seria
+     * persistida sem ninguem chamar {@code salvar}.
+     *
+     * @throws TransicaoDeStatusInvalidaException se a consulta estiver em status terminal
+     * @throws AgendamentoNoPassadoException se o novo periodo nao comecar depois de {@code agora}
+     */
+    public void exigirAlteracaoValida(PeriodoConsulta novoPeriodo, OffsetDateTime agora) {
+        Objects.requireNonNull(agora, "O instante de referencia e obrigatorio");
+        exigirNaoTerminal("alterar");
+        if (novoPeriodo != null && !novoPeriodo.equals(periodo)) {
+            exigirPeriodoFuturo(novoPeriodo, agora);
+        }
+    }
+
+    /**
+     * Altera periodo, medico e observacoes.
+     *
+     * <p>Campo nulo mantem o valor atual — periodo, medico e observacoes. Para
+     * <i>apagar</i> as observacoes, passe uma string vazia ou em branco: nulo significa
+     * "nao mexa", nao "limpe". Observacao de consulta e registro clinico, e uma
+     * remarcacao que nao menciona observacoes nao pode apaga-las.
      *
      * @throws TransicaoDeStatusInvalidaException se a consulta estiver em status terminal
      * @throws AgendamentoNoPassadoException se o novo periodo nao comecar depois de {@code agora}
@@ -116,17 +140,17 @@ public class Consulta {
             UUID novoMedicoId,
             String novasObservacoes,
             OffsetDateTime agora) {
-        Objects.requireNonNull(agora, "O instante de referencia e obrigatorio");
-        exigirNaoTerminal("alterar");
+        exigirAlteracaoValida(novoPeriodo, agora);
 
         if (novoPeriodo != null && !novoPeriodo.equals(periodo)) {
-            exigirPeriodoFuturo(novoPeriodo, agora);
             this.periodo = novoPeriodo;
         }
         if (novoMedicoId != null) {
             this.medicoId = novoMedicoId;
         }
-        this.observacoes = normalizar(novasObservacoes);
+        if (novasObservacoes != null) {
+            this.observacoes = normalizar(novasObservacoes);
+        }
         this.atualizadoEm = agora;
     }
 
