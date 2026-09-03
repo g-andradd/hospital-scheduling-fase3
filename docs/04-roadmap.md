@@ -43,6 +43,7 @@ M06/M07 e M08/M09 são paralelizáveis depois do M05. Duas sessões do Claude Co
 - `StatusConsulta.podeTransicionarPara()` implementa a máquina de estados: `AGENDADA → CONFIRMADA | CANCELADA | REALIZADA`; `CONFIRMADA → REALIZADA | CANCELADA`; `REALIZADA` e `CANCELADA` são terminais.
 - Fakes em memória das portas em `src/test`. Nada de Mockito para as portas.
 - Zero import de `org.springframework`, `jakarta.persistence`, `jakarta.validation` ou `com.fasterxml` nestes dois pacotes.
+- **Configure o Mockito como java agent no surefire**, em vez de deixá-lo se auto-anexar. O build do M00 já emite `Mockito is currently self-attaching to enable the inline-mock-maker. This will no longer work in future releases of the JDK` — com testes de verdade a partir daqui, o aviso passa a aparecer em toda execução. Cuidado ao montar o `argLine`: o JaCoCo já o define, então use `@{argLine}` para compor, nunca sobrescrever, senão a cobertura para de ser medida silenciosamente.
 
 **Critérios de aceite**
 - Um cenário de teste por regra: passado, conflito de médico, conflito de paciente, cada transição inválida, cancelamento sem motivo, alteração de consulta em status terminal

@@ -165,6 +165,8 @@ Conventional Commits em português.
 | `test` | Adição ou ajuste de teste |
 | `docs` | Documentação, incluindo artefatos do OpenSpec |
 | `chore` | Build, dependências, versão, configuração |
+
+**Sem rodapé de coautoria.** As mensagens não levam `Co-Authored-By`, `Generated with` nem qualquer assinatura de agente. Quem revisa e assina o commit é o Gabriel, e o histórico reflete isso. A metodologia assistida por IA está declarada no README, no charter e no relatório técnico — que é onde essa informação pertence, e não repetida em cada linha do `git log`.
 | `perf` | Melhoria de desempenho |
 
 Escopos: `agendamento`, `notificacao`, `historico`, `contracts`, `security`, `infra`, `docs`, `openspec`.
