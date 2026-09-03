@@ -82,8 +82,19 @@ public final class Cenario {
                 "Cardiologia");
     }
 
+    /**
+     * Enfermeiro que registra as consultas.
+     *
+     * <p>Devolve um usuario, e nao apenas um id, porque o registrador e chave
+     * estrangeira e o caso de uso o valida: um id solto, nunca gravado, seria recusado.
+     */
+    public static Usuario enfermeiro() {
+        return usuario(PerfilUsuario.ENFERMEIRO, "Ana Enfermeira", "enfermeiro@hospital.com");
+    }
+
+    /** Id avulso, para cenarios que nao passam pelo caso de uso de agendamento. */
     public static UUID enfermeiroId() {
-        return usuario(PerfilUsuario.ENFERMEIRO, "Ana Enfermeira", "enfermeiro@hospital.com").id();
+        return enfermeiro().id();
     }
 
     public static PeriodoConsulta periodo(OffsetDateTime inicio) {

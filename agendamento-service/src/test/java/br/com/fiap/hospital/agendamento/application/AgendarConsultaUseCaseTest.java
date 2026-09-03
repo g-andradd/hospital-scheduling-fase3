@@ -3,7 +3,7 @@ package br.com.fiap.hospital.agendamento.application;
 import static br.com.fiap.hospital.agendamento.Cenario.AGORA;
 import static br.com.fiap.hospital.agendamento.Cenario.consultaExistente;
 import static br.com.fiap.hospital.agendamento.Cenario.daquiA;
-import static br.com.fiap.hospital.agendamento.Cenario.enfermeiroId;
+import static br.com.fiap.hospital.agendamento.Cenario.enfermeiro;
 import static br.com.fiap.hospital.agendamento.Cenario.haQuanto;
 import static br.com.fiap.hospital.agendamento.Cenario.medico;
 import static br.com.fiap.hospital.agendamento.Cenario.paciente;
@@ -14,6 +14,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import br.com.fiap.hospital.agendamento.domain.Consulta;
 import br.com.fiap.hospital.agendamento.domain.Medico;
 import br.com.fiap.hospital.agendamento.domain.Paciente;
+import br.com.fiap.hospital.agendamento.domain.Usuario;
 import br.com.fiap.hospital.agendamento.domain.StatusConsulta;
 import br.com.fiap.hospital.agendamento.domain.TipoEventoConsulta;
 import br.com.fiap.hospital.agendamento.domain.exception.AgendamentoNoPassadoException;
@@ -39,20 +40,22 @@ class AgendarConsultaUseCaseTest {
 
     private Paciente maria;
     private Medico joao;
+    private Usuario ana;
 
     @BeforeEach
     void preparar() {
         maria = paciente();
         joao = medico();
+        ana = enfermeiro();
         consultas = new ConsultaRepositoryFake();
-        usuarios = new UsuarioRepositoryFake().com(maria).com(joao);
+        usuarios = new UsuarioRepositoryFake().com(maria).com(joao).com(ana);
         eventos = new EventPublisherFake();
         useCase = new AgendarConsultaUseCase(consultas, usuarios, eventos, relogioFixo());
     }
 
     private AgendarConsultaCommand comandoPara(OffsetDateTime inicio) {
         return new AgendarConsultaCommand(
-                maria.id(), joao.id(), enfermeiroId(), inicio, null, "Retorno de rotina");
+                maria.id(), joao.id(), ana.id(), inicio, null, "Retorno de rotina");
     }
 
     @Test
@@ -157,7 +160,7 @@ class AgendarConsultaUseCaseTest {
     void pacienteInexistenteERecusado() {
         UUID desconhecido = UUID.randomUUID();
         AgendarConsultaCommand comando = new AgendarConsultaCommand(
-                desconhecido, joao.id(), enfermeiroId(), daquiA(24), null, null);
+                desconhecido, joao.id(), ana.id(), daquiA(24), null, null);
 
         assertThatThrownBy(() -> useCase.executar(comando))
                 .isInstanceOf(PacienteNaoEncontradoException.class)
@@ -171,7 +174,7 @@ class AgendarConsultaUseCaseTest {
     @DisplayName("medico inexistente e recusado com a mensagem do proprio recurso")
     void medicoInexistenteERecusado() {
         AgendarConsultaCommand comando = new AgendarConsultaCommand(
-                maria.id(), UUID.randomUUID(), enfermeiroId(), daquiA(24), null, null);
+                maria.id(), UUID.randomUUID(), ana.id(), daquiA(24), null, null);
 
         assertThatThrownBy(() -> useCase.executar(comando))
                 .isInstanceOf(MedicoNaoEncontradoException.class)
@@ -182,7 +185,7 @@ class AgendarConsultaUseCaseTest {
     @DisplayName("duracao informada substitui o padrao de 30 minutos")
     void duracaoInformadaSubstituiOPadrao() {
         AgendarConsultaCommand comando = new AgendarConsultaCommand(
-                maria.id(), joao.id(), enfermeiroId(), daquiA(24), 60, null);
+                maria.id(), joao.id(), ana.id(), daquiA(24), 60, null);
 
         assertThat(useCase.executar(comando).duracaoMinutos()).isEqualTo(60);
     }
