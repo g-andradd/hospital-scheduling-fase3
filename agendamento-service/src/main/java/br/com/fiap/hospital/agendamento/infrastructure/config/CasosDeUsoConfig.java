@@ -12,6 +12,12 @@ import br.com.fiap.hospital.agendamento.infrastructure.messaging.EventPublisherL
 import br.com.fiap.hospital.agendamento.domain.port.UsuarioRepositoryPort;
 import java.time.Clock;
 import java.time.ZoneId;
+import br.com.fiap.hospital.agendamento.infrastructure.transacao.AgendarConsultaUseCaseTransacional;
+import br.com.fiap.hospital.agendamento.infrastructure.transacao.AtualizarConsultaUseCaseTransacional;
+import br.com.fiap.hospital.agendamento.infrastructure.transacao.BuscarConsultaPorIdUseCaseTransacional;
+import br.com.fiap.hospital.agendamento.infrastructure.transacao.CancelarConsultaUseCaseTransacional;
+import br.com.fiap.hospital.agendamento.infrastructure.transacao.ConfirmarConsultaUseCaseTransacional;
+import br.com.fiap.hospital.agendamento.infrastructure.transacao.ListarConsultasUseCaseTransacional;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -40,43 +46,53 @@ public class CasosDeUsoConfig {
         return new EventPublisherLogAdapter();
     }
 
+    // Os casos de uso NUS nao sao beans. Cada um e construido aqui dentro e entregue ao
+    // seu decorador, entao nao existe tipo injetavel sem transacao. Injetar por engano
+    // deixa de ser possivel: falha na subida do contexto, e nao em silencio.
+
     @Bean
-    public AgendarConsultaUseCase agendarConsultaUseCase(
+    public AgendarConsultaUseCaseTransacional agendarConsulta(
             ConsultaRepositoryPort consultas,
             UsuarioRepositoryPort usuarios,
             EventPublisherPort eventos,
             Clock clock) {
-        return new AgendarConsultaUseCase(consultas, usuarios, eventos, clock);
+        return new AgendarConsultaUseCaseTransacional(
+                new AgendarConsultaUseCase(consultas, usuarios, eventos, clock));
     }
 
     @Bean
-    public AtualizarConsultaUseCase atualizarConsultaUseCase(
+    public AtualizarConsultaUseCaseTransacional atualizarConsulta(
             ConsultaRepositoryPort consultas,
             UsuarioRepositoryPort usuarios,
             EventPublisherPort eventos,
             Clock clock) {
-        return new AtualizarConsultaUseCase(consultas, usuarios, eventos, clock);
+        return new AtualizarConsultaUseCaseTransacional(
+                new AtualizarConsultaUseCase(consultas, usuarios, eventos, clock));
     }
 
     @Bean
-    public ConfirmarConsultaUseCase confirmarConsultaUseCase(
+    public ConfirmarConsultaUseCaseTransacional confirmarConsulta(
             ConsultaRepositoryPort consultas, EventPublisherPort eventos, Clock clock) {
-        return new ConfirmarConsultaUseCase(consultas, eventos, clock);
+        return new ConfirmarConsultaUseCaseTransacional(
+                new ConfirmarConsultaUseCase(consultas, eventos, clock));
     }
 
     @Bean
-    public CancelarConsultaUseCase cancelarConsultaUseCase(
+    public CancelarConsultaUseCaseTransacional cancelarConsulta(
             ConsultaRepositoryPort consultas, EventPublisherPort eventos, Clock clock) {
-        return new CancelarConsultaUseCase(consultas, eventos, clock);
+        return new CancelarConsultaUseCaseTransacional(
+                new CancelarConsultaUseCase(consultas, eventos, clock));
     }
 
     @Bean
-    public BuscarConsultaPorIdUseCase buscarConsultaPorIdUseCase(ConsultaRepositoryPort consultas) {
-        return new BuscarConsultaPorIdUseCase(consultas);
+    public BuscarConsultaPorIdUseCaseTransacional buscarConsultaPorId(
+            ConsultaRepositoryPort consultas) {
+        return new BuscarConsultaPorIdUseCaseTransacional(
+                new BuscarConsultaPorIdUseCase(consultas));
     }
 
     @Bean
-    public ListarConsultasUseCase listarConsultasUseCase(ConsultaRepositoryPort consultas) {
-        return new ListarConsultasUseCase(consultas);
+    public ListarConsultasUseCaseTransacional listarConsultas(ConsultaRepositoryPort consultas) {
+        return new ListarConsultasUseCaseTransacional(new ListarConsultasUseCase(consultas));
     }
 }
