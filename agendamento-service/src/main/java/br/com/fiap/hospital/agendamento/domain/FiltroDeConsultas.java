@@ -37,10 +37,24 @@ public record FiltroDeConsultas(
 
     public FiltroDeConsultas {
         status = status == null ? Set.of() : Set.copyOf(status);
+
+        // Tamanho e pagina sao limitados no mesmo lugar, mas de formas diferentes de
+        // proposito. Tamanho excessivo e pedido razoavel mal calibrado — quem manda
+        // size=100000 quer "o maximo possivel", e aparar responde exatamente isso.
+        // Pagina impossivel e pedido invalido: nao existe resposta correta para a
+        // pagina um bilhao, e aparar inventaria uma. Por isso uma e aparada e a outra
+        // recusada.
+        tamanho = tamanho <= 0 ? TAMANHO_PADRAO : Math.min(tamanho, TAMANHO_MAXIMO);
+
         if (pagina < 0) {
             throw new IllegalArgumentException("O numero da pagina nao pode ser negativo: " + pagina);
         }
-        tamanho = tamanho <= 0 ? TAMANHO_PADRAO : Math.min(tamanho, TAMANHO_MAXIMO);
+        // O deslocamento e calculado como pagina * tamanho. Em int, isso transborda em
+        // silencio e o banco recebe um offset negativo — 500 por um parametro de query.
+        if ((long) pagina * tamanho > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException(
+                    "Pagina fora do intervalo permitido: " + pagina + " com tamanho " + tamanho);
+        }
     }
 
     /** Filtro sem criterios, na primeira pagina, com o tamanho padrao. */
