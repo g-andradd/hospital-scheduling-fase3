@@ -194,8 +194,10 @@ Uma change só é arquivada quando:
 4. Cobertura do módulo tocado ≥ 80%, **a partir do M01** — o M00 não entrega comportamento e não tem código elegível; global ≥ 85% com gate de build a partir do M10
 5. ArchUnit verde no `agendamento-service`
 6. Documentação afetada atualizada no mesmo PR (README, ADR, Postman)
-7. PR aberto, revisado e mergeado em `develop` com `--no-ff` pelo Gabriel
-8. `/opsx:archive` executado pelo Claude Code na feature branch, após a aprovação do PR e antes do merge; o commit resultante é do Gabriel
+7. `/opsx:archive` executado na feature branch após a aprovação do PR, **e o commit do archive empurrado antes do merge**. O diff do PR tem de mostrar `openspec/changes/<id>/` movida para `changes/archive/` e a spec promovida em `openspec/specs/<capability>/`
+8. PR mergeado em `develop` com `--no-ff` pelo Gabriel
+
+> **Confira o archive no diff do PR antes de mergear.** Rodar `/opsx:archive` não basta: ele mexe só no working tree, e o commit é um passo separado. Se algo interromper a sequência entre o archive e o merge — uma revisão automática apontando defeito, um ciclo de correção —, o commit do archive cai fora do fluxo e o merge leva o código sem a spec. Aconteceu no M01: o PR foi mergeado com a change ainda ativa em `changes/`, e `agendamento-de-consultas` não chegou a `openspec/specs/`. O sintoma, depois do merge, é `openspec list` ainda mostrar uma change ativa.
 
 > **Changes que mexem em build ou infraestrutura verificam a partir de um clone limpo, não da árvore de trabalho.** Diretório vazio não é versionado, artefato gerado é ignorado e configuração local não viaja — uma verificação feita só no working tree pode passar e o clone do avaliador falhar. Antes de aprovar o PR: `git clone -b <branch> <url> <tmp> && cd <tmp> && mvn clean verify`.
 
