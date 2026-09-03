@@ -343,11 +343,41 @@ class ConsultaControllerTest {
         }
 
         @Test
-        @DisplayName("nenhuma delas expoe nome de classe interna")
-        void nenhumaExpoeInterno() throws Exception {
+        @DisplayName("UUID invalido produz detail estavel, sem tipo Java")
+        void uuidInvalidoProduzDetailEstavel() throws Exception {
             mvc.perform(get("/api/v1/consultas/nao-e-um-uuid"))
-                    .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.not(
-                            org.hamcrest.Matchers.containsString("org.springframework"))));
+                    .andExpect(jsonPath("$.detail")
+                            .value("Valor nao permitido para o parametro 'id'"));
+        }
+
+        @Test
+        @DisplayName("nenhum erro de requisicao vaza tipo Java, pacote nem nome de classe")
+        void nenhumErroVazaInterno() throws Exception {
+            record Caso(String descricao, org.springframework.test.web.servlet.RequestBuilder req) {}
+
+            java.util.List<Caso> casos = java.util.List.of(
+                    new Caso("UUID invalido no path", get("/api/v1/consultas/nao-e-um-uuid")),
+                    new Caso("enum invalido", get("/api/v1/consultas").param("status", "XPTO")),
+                    new Caso("data invalida", get("/api/v1/consultas").param("de", "10/09/2026")),
+                    new Caso("JSON malformado", post("/api/v1/consultas")
+                            .contentType("application/json").content("{\"pacienteId\": ")),
+                    new Caso("corpo ausente", patch("/api/v1/consultas/" + ID + "/cancelar")
+                            .contentType("application/json")),
+                    new Caso("metodo nao suportado",
+                            org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                                    .delete("/api/v1/consultas/" + ID)),
+                    new Caso("midia nao suportada", post("/api/v1/consultas")
+                            .contentType("text/plain").content("x")));
+
+            for (Caso caso : casos) {
+                String corpo = mvc.perform(caso.req())
+                        .andReturn().getResponse().getContentAsString();
+
+                org.assertj.core.api.Assertions.assertThat(corpo)
+                        .as("%s nao pode expor detalhe interno de implementacao", caso.descricao())
+                        .doesNotContain("java.lang", "java.util", "org.springframework",
+                                "com.fasterxml", "Exception", "required type", "nested exception");
+            }
         }
     }
 
@@ -422,17 +452,43 @@ class ConsultaControllerTest {
                             .value("https://hospital.fiap.br/erros/transicao-de-status-invalida"));
         }
 
-        @Test
+        /**
+         * O corpo enviado precisa ser mesmo "sem motivo".
+         *
+         * <p>A versao anterior deste teste mandava {@code {"motivo":"algum"}} e so
+         * provava que o tratador mapeia a excecao — nao o Scenario que o nome promete.
+         * Enquanto existia um {@code @NotBlank} no DTO, um corpo realmente sem motivo
+         * nem chegava ao caso de uso: era interceptado e virava 400.
+         */
+        @org.junit.jupiter.params.ParameterizedTest(name = "corpo = {0}")
+        @org.junit.jupiter.params.provider.ValueSource(strings = {
+                "{}",
+                "{\"motivo\": null}",
+                "{\"motivo\": \"\"}",
+                "{\"motivo\": \"   \"}"
+        })
         @DisplayName("Scenario: Cancelamento sem motivo → 422")
-        void cancelamentoSemMotivo() throws Exception {
+        void cancelamentoSemMotivo(String corpo) throws Exception {
             willThrow(new MotivoDeCancelamentoObrigatorioException())
                     .given(cancelar).executar(any());
 
             mvc.perform(patch("/api/v1/consultas/" + ID + "/cancelar")
-                            .contentType("application/json").content("{\"motivo\":\"algum\"}"))
+                            .contentType("application/json").content(corpo))
                     .andExpect(status().isUnprocessableEntity())
                     .andExpect(jsonPath("$.type").value(
                             "https://hospital.fiap.br/erros/motivo-de-cancelamento-obrigatorio"));
+
+            org.mockito.ArgumentCaptor<br.com.fiap.hospital.agendamento.application
+                    .CancelarConsultaCommand> capturado = org.mockito.ArgumentCaptor.forClass(
+                            br.com.fiap.hospital.agendamento.application
+                                    .CancelarConsultaCommand.class);
+            org.mockito.Mockito.verify(cancelar).executar(capturado.capture());
+
+            org.assertj.core.api.Assertions.assertThat(capturado.getValue().motivo())
+                    .as("o corpo sem motivo precisa CHEGAR ao caso de uso; se a validacao "
+                            + "do DTO o interceptasse, este Scenario nunca aconteceria")
+                    .satisfies(motivo -> org.assertj.core.api.Assertions
+                            .assertThat(motivo == null || motivo.isBlank()).isTrue());
         }
 
         @Test
