@@ -25,6 +25,7 @@
         <spring-boot.version>3.5.7</spring-boot.version>
 
         <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
+        <maven-dependency-plugin.version>3.6.1</maven-dependency-plugin.version>
         <maven-surefire-plugin.version>3.2.5</maven-surefire-plugin.version>
         <maven-failsafe-plugin.version>3.2.5</maven-failsafe-plugin.version>
         <jacoco-maven-plugin.version>0.8.12</jacoco-maven-plugin.version>
@@ -75,6 +76,26 @@
                 </configuration>
             </plugin>
 
+            <!--
+                Expoe o caminho do jar de cada dependencia como propriedade
+                (ex.: ${org.mockito:mockito-core:jar}), usada abaixo para declarar
+                o Mockito como java agent no surefire.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>${maven-dependency-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>propriedades-de-dependencia</id>
+                        <phase>initialize</phase>
+                        <goals>
+                            <goal>properties</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
             <!-- Testes unitarios: rapidos, sem container. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -84,6 +105,18 @@
                     <includes>
                         <include>**/*Test.java</include>
                     </includes>
+                    <!--
+                        O Mockito entra como java agent declarado, em vez de se auto-anexar
+                        em tempo de execucao — o JDK vai proibir o auto-attach.
+
+                        @{argLine} COMPOE com o valor que o jacoco:prepare-agent escreveu na
+                        propriedade argLine; ele nao pode ser omitido. Escrever apenas
+                        -javaagent:... aqui substituiria esse valor, o agente do JaCoCo sumiria,
+                        e a cobertura passaria a ser reportada como zero — sem erro e com o
+                        build verde. A sintaxe @{...} e resolvida na execucao do surefire,
+                        depois que o JaCoCo ja definiu a propriedade.
+                    -->
+                    <argLine>@{argLine} -javaagent:${org.mockito:mockito-core:jar}</argLine>
                 </configuration>
             </plugin>
 
