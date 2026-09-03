@@ -2,6 +2,7 @@ package br.com.fiap.hospital.agendamento.domain.port;
 
 import br.com.fiap.hospital.agendamento.domain.Consulta;
 import br.com.fiap.hospital.agendamento.domain.FiltroDeConsultas;
+import br.com.fiap.hospital.agendamento.domain.Pagina;
 import br.com.fiap.hospital.agendamento.domain.PeriodoConsulta;
 import java.util.List;
 import java.util.Optional;
@@ -29,5 +30,11 @@ public interface ConsultaRepositoryPort {
     /** Consultas ativas do paciente que se sobrepoem ao periodo informado. */
     List<Consulta> buscarAtivasDoPacienteNoPeriodo(UUID pacienteId, PeriodoConsulta periodo);
 
-    List<Consulta> listar(FiltroDeConsultas filtro);
+    /**
+     * Pagina de consultas que satisfazem o filtro.
+     *
+     * <p>A paginacao e resolvida pelo armazenamento: so os elementos da pagina pedida
+     * atravessam a fronteira. Trazer tudo e fatiar depois anularia o teto de tamanho.
+     */
+    Pagina<Consulta> listar(FiltroDeConsultas filtro);
 }
