@@ -333,7 +333,7 @@ tabela de autorização vira um Scenario e um teste.
 
 **Notas técnicas obrigatórias**
 - Regras ArchUnit: `domain` não depende de `application` nem `infrastructure`; `domain` sem Spring/JPA/Jackson/Validation; classes `*UseCase` com exatamente um método público; entidades JPA só em `infrastructure.persistence`; controllers não injetam repositório, só caso de uso; nada de `System.out`.
-- `correlationId`: filtro HTTP gera ou lê `X-Correlation-Id` → MDC → header AMQP no relay → MDC no consumidor. O mesmo id tem que aparecer nos três logs para um único fluxo.
+- `correlationId`: **o filtro HTTP foi antecipado para o M03**, porque o `ProblemDetail` do §8 já exige o campo. Aqui resta a propagação: header AMQP no relay do outbox → MDC no consumidor, nos dois serviços. O filtro em si só precisa ser replicado no notificacao e no historico. O mesmo id tem que aparecer nos três logs para um único fluxo.
 - Actuator expõe `health`, `info`, `metrics`, `prometheus`. **Nunca** `env` ou `beans`.
 
 ---
