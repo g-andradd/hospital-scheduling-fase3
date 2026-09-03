@@ -105,7 +105,11 @@ A distinção que organiza as exceções não é "quantas §4 nomeia", é **o qu
 
 **Entrada malformada** — um valor que não chega a representar a coisa que diz representar. CPF com dígito verificador errado, e-mail sem arroba, CRM fora do formato. Esses lançam `IllegalArgumentException`, com mensagem em português, direto do construtor do value object. O `ProblemDetail` do M03 os responde como **400**.
 
-**Regra de negócio** — uma requisição bem formada que o domínio recusa por causa do estado do sistema ou de uma exigência do negócio. Aqui entram as quatro exceções de `docs/01-arquitetura.md` §4 — `AgendamentoNoPassadoException`, `ConflitoDeAgendaException`, `ConsultaNaoEncontradaException`, `TransicaoDeStatusInvalidaException` — e mais uma, `MotivoDeCancelamentoObrigatorioException`, respondida como **422**.
+**Regra de negócio** — uma requisição bem formada que o domínio recusa por causa do estado do sistema ou de uma exigência do negócio. Aqui entram `AgendamentoNoPassadoException`, `ConflitoDeAgendaException` e `TransicaoDeStatusInvalidaException`, mais `MotivoDeCancelamentoObrigatorioException`, respondida como **422**.
+
+**Recurso inexistente** — subfamília da anterior, com destino próprio. `RecursoNaoEncontradoException` é a base abstrata de `ConsultaNaoEncontradaException`, `PacienteNaoEncontradoException` e `MedicoNaoEncontradoException`, respondida como **404**.
+
+A base existe porque a spec exige recusar registro para paciente inexistente, e §4 nomeava apenas a exceção de consulta. Reusá-la faria um paciente ausente responder "Consulta não encontrada". Mapear a base no §8 cobre os três subtipos com uma entrada só, o `detail` do `ProblemDetail` vem da mensagem da exceção concreta, e um recurso novo em change futura herda em vez de exigir alteração no mapa.
 
 Cancelar sem motivo pertence a esta segunda família, não à primeira. A requisição é sintaticamente impecável: um identificador de consulta válido e um campo de texto ausente. O que a recusa é a regra de que cancelamento hospitalar exige justificativa registrada — mesma natureza de "não se marca consulta no passado". Tratá-la como erro de formato responderia 400 a uma violação de política e apagaria essa diferença na pasta de cenários de erro da collection do M13, que é justamente onde ela precisa aparecer.
 
