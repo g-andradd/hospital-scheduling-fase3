@@ -126,7 +126,8 @@ hospital-scheduling-fase3/
 - Entidades: `Consulta`, `Usuario`, `Paciente`, `Medico`
 - Value objects: `PeriodoConsulta`, `Cpf`, `Email`, `Crm`
 - Enums: `PerfilUsuario`, `StatusConsulta`
-- Exceções de negócio: `ConflitoDeAgendaException`, `TransicaoDeStatusInvalidaException`, `AgendamentoNoPassadoException`, `MotivoDeCancelamentoObrigatorioException`
+- Exceções de negócio: `ConflitoDeAgendaException`, `TransicaoDeStatusInvalidaException`, `AgendamentoNoPassadoException`, `MotivoDeCancelamentoObrigatorioException`, `AlteracaoConcorrenteException`
+- `AlteracaoConcorrenteException` é lançada pelo adaptador de persistência ao traduzir a falha de lock otimista. Ela mora no `domain` para que nenhum tipo do Spring suba pela camada de aplicação, e é o que permite ao M03 montar o `ProblemDetail` sem conhecer exceções de persistência
 - Exceções de recurso inexistente: `RecursoNaoEncontradoException` (base abstrata) e os subtipos `ConsultaNaoEncontradaException`, `PacienteNaoEncontradoException`, `MedicoNaoEncontradoException`. A base existe para que o mapa da §8 precise de uma entrada só e o tratador do M03 capture a família inteira; cada subtipo carrega a mensagem do seu próprio recurso, de modo que um paciente inexistente não responda "Consulta não encontrada"
 - Portas de saída: `ConsultaRepositoryPort`, `UsuarioRepositoryPort`, `EventPublisherPort`
 
@@ -222,7 +223,7 @@ Cadeia de filtros: `SecurityFilterChain` stateless, CSRF desabilitado (API), `/a
 }
 ```
 
-Mapa de exceções: `AgendamentoNoPassado` → 422, `ConflitoDeAgenda` → 409, `RecursoNaoEncontrado` → 404, `TransicaoDeStatusInvalida` → 409, `MotivoDeCancelamentoObrigatorio` → 422, `IllegalArgumentException` → 400, `MethodArgumentNotValid` → 400, `AccessDenied` → 403, `Authentication` → 401.
+Mapa de exceções: `AgendamentoNoPassado` → 422, `ConflitoDeAgenda` → 409, `RecursoNaoEncontrado` → 404, `TransicaoDeStatusInvalida` → 409, `MotivoDeCancelamentoObrigatorio` → 422, `AlteracaoConcorrente` → 409, `IllegalArgumentException` → 400, `MethodArgumentNotValid` → 400, `AccessDenied` → 403, `Authentication` → 401.
 
 `RecursoNaoEncontrado` é a **base** de `ConsultaNaoEncontrada`, `PacienteNaoEncontrado` e `MedicoNaoEncontrado`. Mapear a base cobre os três com uma entrada só, e um recurso novo em change futura não exige mexer neste mapa — só herdar. O `detail` do `ProblemDetail` vem da mensagem da exceção concreta, então o cliente continua sabendo qual recurso faltou.
 

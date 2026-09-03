@@ -125,6 +125,45 @@ docker compose down      # para os containers, preserva os dados
 docker compose down -v   # remove também os volumes — apaga tudo
 ```
 
+## Executar o serviço de agendamento
+
+Com a infraestrutura no ar e o `.env` preenchido:
+
+```bash
+mvn -pl agendamento-service -am spring-boot:run
+```
+
+O schema do `agendamento_db` é criado pelo **Flyway**, nunca pelo Hibernate: o
+`ddl-auto` está em `validate`, então a aplicação confere o mapeamento contra o banco
+e **recusa subir** se divergirem.
+
+### Quando a subida falha por schema divergente
+
+`SchemaManagementException` ou falha de validação do Flyway significa que o banco está
+num estado que as migrations não descrevem — quase sempre por ter sido criado por uma
+versão anterior do schema. Como não há dado que importe até o M04, o caminho é
+recriar:
+
+```bash
+docker compose down -v && docker compose up -d
+```
+
+Alterar uma migration já aplicada **não** resolve: o Flyway compara o checksum e falha
+de novo. Migration aplicada é imutável; correção é migration nova.
+
+### Testes de integração
+
+Os testes `*IT` sobem um PostgreSQL real via Testcontainers e exigem Docker no ar:
+
+```bash
+mvn verify
+```
+
+Se o Testcontainers não encontrar o Docker mesmo com o daemon rodando, verifique se
+`~/.testcontainers.properties` não fixa uma `docker.client.strategy` apontando para um
+endpoint que a sua instalação não expõe — remover essa linha faz o Testcontainers
+autodescobrir de novo.
+
 ## Executar a aplicação completa
 
 > Preenchido no M12.

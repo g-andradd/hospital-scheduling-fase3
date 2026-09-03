@@ -59,12 +59,41 @@ context: |
   Merges sempre --no-ff. Conventional Commits em português.
   Escopos: agendamento, notificacao, historico, contracts, security, infra, docs, openspec.
 
+  ECONOMIA DE CONTEXTO
+  O relatorio final de cada etapa vai para o gestor por copia manual, entao ele custa
+  caro. Formato obrigatorio, no maximo 25 linhas:
+  1. Estado: X/Y tasks, resultado do mvn verify, cobertura.
+  2. Decisoes que voce tomou sozinho, e apenas as que desviam da spec, do roadmap ou
+     de uma instrucao explicita. Uma linha cada.
+  3. Perguntas bloqueantes. Se nao houver, escreva "nenhuma".
+  4. Comandos git.
+  NAO reproduza o conteudo dos artefatos que acabou de escrever, NAO liste tarefa por
+  tarefa, NAO repita tabelas de criterios de aceite nem o resumo do que cada arquivo
+  contem. O gestor le os arquivos no repositorio; repetir o conteudo no chat e gasto
+  puro. Narracao durante o trabalho tambem deve ser curta.
+
   REGRAS DE EXECUÇÃO
   Se a spec nao cobrir uma decisao necessaria, PARE e pergunte. Nao improvise requisito.
   Nao adiante escopo de changes futuras do roadmap.
   Arquive na propria feature branch, depois da aprovacao do PR e antes do merge, para
   que spec e codigo entrem em develop no mesmo merge. A change vai para
   openspec/changes/archive/<change-id>/.
+
+  RELATORIO AO GABRIEL — SEJA BREVE
+  Tokens sao recurso escasso neste projeto. O relatorio no chat NAO repete o que
+  ja esta nos artefatos: proposal, design, spec e tasks sao lidos direto do
+  repositorio por quem revisa. Nao narre raciocinio, tentativas, comandos
+  intermediarios, nem monte tabelas que duplicam o conteudo dos artefatos.
+  Justificativa tecnica vive no design.md; no chat, cite o arquivo.
+  Formato fixo do relatorio, nesta ordem, sem preambulo:
+    STATUS   — change, X/Y tasks, build, numero de testes, cobertura
+    DESVIOS  — o que saiu da proposta aprovada e por que, ou "nenhum"
+    DECISOES — o que precisa do Gabriel para prosseguir, ou "nenhuma"
+    RISCO    — o que voce faria diferente ou o que ficou fragil, ou "nenhum"
+    VERIFICACAO — cada criterio de aceite com UMA linha de evidencia
+    GIT      — os comandos, sem explicacao
+  Alvo: 40 linhas. Se passar disso, corte explicacao, nao conteudo.
+  Quando parar para perguntar, mande SO a pergunta e as opcoes — nada mais.
 
   RESTRIÇÕES
   Sem frontend. Sem provedor real de SMS/e-mail (porta com adaptador log e SMTP/Mailpit).

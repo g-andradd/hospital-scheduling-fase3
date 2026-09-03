@@ -28,13 +28,35 @@ public class ConsultaRepositoryFake implements ConsultaRepositoryPort {
 
     @Override
     public Consulta salvar(Consulta consulta) {
-        armazenadas.put(consulta.id(), consulta);
-        return consulta;
+        armazenadas.put(consulta.id(), copiar(consulta));
+        return copiar(consulta);
     }
 
     @Override
     public Optional<Consulta> buscarPorId(UUID id) {
-        return Optional.ofNullable(armazenadas.get(id));
+        return Optional.ofNullable(armazenadas.get(id)).map(ConsultaRepositoryFake::copiar);
+    }
+
+    /**
+     * Toda leitura e toda gravacao atravessam uma copia.
+     *
+     * <p>Sem isso o fake devolveria a propria instancia guardada, e mutar o objeto de
+     * dominio alteraria o "armazenamento" sem ninguem chamar salvar — comportamento que
+     * o adaptador real nao tem, ja que ele mapeia a entidade para um objeto novo a cada
+     * leitura. A suite de contrato compartilhada pegou exatamente essa divergencia.
+     */
+    private static Consulta copiar(Consulta consulta) {
+        return Consulta.reconstituir(
+                consulta.id(),
+                consulta.pacienteId(),
+                consulta.medicoId(),
+                consulta.registradoPorId(),
+                consulta.periodo(),
+                consulta.status(),
+                consulta.observacoes(),
+                consulta.motivoCancelamento(),
+                consulta.criadoEm(),
+                consulta.atualizadoEm());
     }
 
     @Override
@@ -53,14 +75,17 @@ public class ConsultaRepositoryFake implements ConsultaRepositoryPort {
 
     @Override
     public List<Consulta> listar(FiltroDeConsultas filtro) {
-        return armazenadas.values().stream().filter(filtro::aceita).toList();
+        return armazenadas.values().stream()
+                .filter(filtro::aceita)
+                .map(ConsultaRepositoryFake::copiar)
+                .toList();
     }
 
     private List<Consulta> ativasQueSobrepoem(PeriodoConsulta periodo) {
         List<Consulta> encontradas = new ArrayList<>();
         for (Consulta consulta : armazenadas.values()) {
             if (consulta.ativa() && consulta.periodo().sobrepoe(periodo)) {
-                encontradas.add(consulta);
+                encontradas.add(copiar(consulta));
             }
         }
         return encontradas;
@@ -69,7 +94,7 @@ public class ConsultaRepositoryFake implements ConsultaRepositoryPort {
     /** Insere direto, sem passar pelas regras do caso de uso. Para montar cenarios. */
     public ConsultaRepositoryFake com(Consulta... consultas) {
         for (Consulta consulta : consultas) {
-            armazenadas.put(consulta.id(), consulta);
+            armazenadas.put(consulta.id(), copiar(consulta));
         }
         return this;
     }
@@ -79,6 +104,6 @@ public class ConsultaRepositoryFake implements ConsultaRepositoryPort {
     }
 
     public List<Consulta> todas() {
-        return List.copyOf(armazenadas.values());
+        return armazenadas.values().stream().map(ConsultaRepositoryFake::copiar).toList();
     }
 }
