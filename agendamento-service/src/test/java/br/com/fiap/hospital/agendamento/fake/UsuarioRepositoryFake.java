@@ -31,6 +31,27 @@ public class UsuarioRepositoryFake implements UsuarioRepositoryPort {
         return Optional.ofNullable(usuarios.get(id));
     }
 
+    @Override
+    public Optional<Usuario> buscarUsuarioPorEmail(String email) {
+        return email == null ? Optional.empty() : usuarios.values().stream()
+                .filter(u -> u.email().valor().equalsIgnoreCase(email.trim()))
+                .findFirst();
+    }
+
+    @Override
+    public Optional<Paciente> buscarPacientePorUsuario(UUID usuarioId) {
+        return pacientes.values().stream()
+                .filter(p -> p.usuario().id().equals(usuarioId))
+                .findFirst();
+    }
+
+    @Override
+    public Optional<Medico> buscarMedicoPorUsuario(UUID usuarioId) {
+        return medicos.values().stream()
+                .filter(m -> m.usuario().id().equals(usuarioId))
+                .findFirst();
+    }
+
     public UsuarioRepositoryFake com(Paciente paciente) {
         pacientes.put(paciente.id(), paciente);
         usuarios.put(paciente.usuario().id(), paciente.usuario());

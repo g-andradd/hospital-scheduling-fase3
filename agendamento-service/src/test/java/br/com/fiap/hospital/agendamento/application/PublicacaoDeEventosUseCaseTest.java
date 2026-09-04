@@ -5,6 +5,7 @@ import static br.com.fiap.hospital.agendamento.Cenario.daquiA;
 import static br.com.fiap.hospital.agendamento.Cenario.enfermeiro;
 import static br.com.fiap.hospital.agendamento.Cenario.haQuanto;
 import static br.com.fiap.hospital.agendamento.Cenario.medico;
+import static br.com.fiap.hospital.agendamento.Cenario.solicitanteMedico;
 import static br.com.fiap.hospital.agendamento.Cenario.paciente;
 import static br.com.fiap.hospital.agendamento.Cenario.relogioFixo;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -68,7 +69,7 @@ class PublicacaoDeEventosUseCaseTest {
 
         new AtualizarConsultaUseCase(consultas, usuarios, eventos, relogioFixo())
                 .executar(new AtualizarConsultaCommand(criada.id(), daquiA(48), null, null, null));
-        new ConfirmarConsultaUseCase(consultas, eventos, relogioFixo()).executar(criada.id());
+        new ConfirmarConsultaUseCase(consultas, eventos, relogioFixo()).executar(criada.id(), solicitanteMedico());
         new CancelarConsultaUseCase(consultas, eventos, relogioFixo())
                 .executar(new CancelarConsultaCommand(criada.id(), "paciente desistiu"));
 
@@ -101,7 +102,7 @@ class PublicacaoDeEventosUseCaseTest {
 
         assertThat(catchThrowable(() ->
                         new ConfirmarConsultaUseCase(consultas, eventos, relogioFixo())
-                                .executar(terminada.id())))
+                                .executar(terminada.id(), solicitanteMedico())))
                 .as("transicao invalida")
                 .isNotNull();
 

@@ -126,6 +126,23 @@ class CoberturaDoMapaDeErrosTest {
                 .doesNotHaveDuplicates();
     }
 
+    /**
+     * Terceira familia, alem do dominio e do MVC.
+     *
+     * <p>O AccessDeniedHandler da cadeia so alcanca recusas que acontecem no filtro. A
+     * recusa do {@code @PreAuthorize} sobe pela invocacao do controller, e sem tratador
+     * nominal cairia no catch-all: 403 virando 500. Aconteceu de verdade neste change.
+     */
+    @Test
+    @DisplayName("as excecoes de seguranca tem tratador nominal")
+    void excecoesDeSegurancaTemTratadorNominal() {
+        assertThat(excecoesComTratador())
+                .as("sem tratador nominal, a recusa por perfil vira 500")
+                .contains(
+                        org.springframework.security.access.AccessDeniedException.class,
+                        org.springframework.security.core.AuthenticationException.class);
+    }
+
     @Test
     @DisplayName("o advice herda o tratamento da familia de excecoes do Spring MVC")
     void herdaOTratamentoDoSpringMvc() {

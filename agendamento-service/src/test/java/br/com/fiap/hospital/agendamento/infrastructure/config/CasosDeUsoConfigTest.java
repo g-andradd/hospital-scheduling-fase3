@@ -12,10 +12,13 @@ import br.com.fiap.hospital.agendamento.domain.Medico;
 import br.com.fiap.hospital.agendamento.domain.Paciente;
 import br.com.fiap.hospital.agendamento.domain.Usuario;
 import br.com.fiap.hospital.agendamento.domain.port.ConsultaRepositoryPort;
+import br.com.fiap.hospital.agendamento.domain.port.VerificadorDeSenhaPort;
 import br.com.fiap.hospital.agendamento.domain.port.EventPublisherPort;
 import br.com.fiap.hospital.agendamento.domain.port.UsuarioRepositoryPort;
 import br.com.fiap.hospital.agendamento.fake.ConsultaRepositoryFake;
+import br.com.fiap.hospital.agendamento.application.AutenticarUsuarioUseCase;
 import br.com.fiap.hospital.agendamento.infrastructure.transacao.AgendarConsultaUseCaseTransacional;
+import br.com.fiap.hospital.agendamento.infrastructure.transacao.AutenticarUsuarioUseCaseTransacional;
 import br.com.fiap.hospital.agendamento.infrastructure.transacao.AtualizarConsultaUseCaseTransacional;
 import br.com.fiap.hospital.agendamento.infrastructure.transacao.BuscarConsultaPorIdUseCaseTransacional;
 import br.com.fiap.hospital.agendamento.infrastructure.transacao.CancelarConsultaUseCaseTransacional;
@@ -47,10 +50,11 @@ class CasosDeUsoConfigTest {
     private final ApplicationContextRunner contexto = new ApplicationContextRunner()
             .withUserConfiguration(CasosDeUsoConfig.class)
             .withBean(ConsultaRepositoryPort.class, ConsultaRepositoryFake::new)
-            .withBean(UsuarioRepositoryPort.class, UsuarioRepositoryVazio::new);
+            .withBean(UsuarioRepositoryPort.class, UsuarioRepositoryVazio::new)
+            .withBean(VerificadorDeSenhaPort.class, VerificadorDeSenhaFalso::new);
 
     @Test
-    @DisplayName("os seis decoradores transacionais sao resolvidos")
+    @DisplayName("todos os decoradores transacionais sao resolvidos")
     void osSeisDecoradoresSaoResolvidos() {
         contexto.run(ctx -> assertThat(ctx)
                 .hasNotFailed()
@@ -59,7 +63,8 @@ class CasosDeUsoConfigTest {
                 .hasSingleBean(ConfirmarConsultaUseCaseTransacional.class)
                 .hasSingleBean(CancelarConsultaUseCaseTransacional.class)
                 .hasSingleBean(BuscarConsultaPorIdUseCaseTransacional.class)
-                .hasSingleBean(ListarConsultasUseCaseTransacional.class));
+                .hasSingleBean(ListarConsultasUseCaseTransacional.class)
+                .hasSingleBean(AutenticarUsuarioUseCaseTransacional.class));
     }
 
     @Test
@@ -71,7 +76,8 @@ class CasosDeUsoConfigTest {
                 ConfirmarConsultaUseCase.class,
                 CancelarConsultaUseCase.class,
                 BuscarConsultaPorIdUseCase.class,
-                ListarConsultasUseCase.class);
+                ListarConsultasUseCase.class,
+                AutenticarUsuarioUseCase.class);
 
         contexto.run(ctx -> {
             for (Class<?> nu : nus) {
@@ -104,6 +110,19 @@ class CasosDeUsoConfigTest {
                 .run(ctx -> assertThat(ctx).hasFailed());
     }
 
+    /** So a fiacao importa aqui; o algoritmo de senha tem teste proprio. */
+    private static final class VerificadorDeSenhaFalso implements VerificadorDeSenhaPort {
+        @Override
+        public boolean confere(String senhaEmClaro, String hash) {
+            return false;
+        }
+
+        @Override
+        public void consumirTempoDeVerificacao() {
+            // sem efeito
+        }
+    }
+
     /** O contrato de {@link UsuarioRepositoryPort} nao importa aqui; so a fiacao. */
     private static final class UsuarioRepositoryVazio implements UsuarioRepositoryPort {
         @Override
@@ -118,6 +137,21 @@ class CasosDeUsoConfigTest {
 
         @Override
         public Optional<Usuario> buscarUsuarioPorId(UUID id) {
+            return Optional.empty();
+        }
+
+        @Override
+        public Optional<Usuario> buscarUsuarioPorEmail(String email) {
+            return Optional.empty();
+        }
+
+        @Override
+        public Optional<Paciente> buscarPacientePorUsuario(UUID usuarioId) {
+            return Optional.empty();
+        }
+
+        @Override
+        public Optional<Medico> buscarMedicoPorUsuario(UUID usuarioId) {
             return Optional.empty();
         }
     }

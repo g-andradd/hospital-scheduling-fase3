@@ -3,6 +3,7 @@ package br.com.fiap.hospital.agendamento.application;
 import static br.com.fiap.hospital.agendamento.Cenario.consultaExistente;
 import static br.com.fiap.hospital.agendamento.Cenario.daquiA;
 import static br.com.fiap.hospital.agendamento.Cenario.medico;
+import static br.com.fiap.hospital.agendamento.Cenario.solicitanteMedico;
 import static br.com.fiap.hospital.agendamento.Cenario.paciente;
 import static br.com.fiap.hospital.agendamento.Cenario.AGORA;
 import static br.com.fiap.hospital.agendamento.Cenario.relogioEm;
@@ -91,7 +92,7 @@ class CicloDeVidaDaConsultaUseCaseTest {
         void confirmacaoBemSucedida() {
             Consulta consulta = existenteEm(StatusConsulta.AGENDADA);
 
-            ConsultaResumo resumo = confirmar.executar(consulta.id());
+            ConsultaResumo resumo = confirmar.executar(consulta.id(), solicitanteMedico());
 
             assertThat(resumo.status()).isEqualTo(StatusConsulta.CONFIRMADA);
             assertThat(resumo.atualizadoEm()).isEqualTo(QUANDO_OPERA);
@@ -103,7 +104,7 @@ class CicloDeVidaDaConsultaUseCaseTest {
         void confirmacaoDeCanceladaERecusada() {
             Consulta consulta = existenteEm(StatusConsulta.CANCELADA);
 
-            assertThatThrownBy(() -> confirmar.executar(consulta.id()))
+            assertThatThrownBy(() -> confirmar.executar(consulta.id(), solicitanteMedico()))
                     .isInstanceOf(TransicaoDeStatusInvalidaException.class);
             assertConsultaIntacta(consulta);
         }
@@ -113,7 +114,7 @@ class CicloDeVidaDaConsultaUseCaseTest {
         void confirmacaoDeRealizadaERecusada() {
             Consulta consulta = existenteEm(StatusConsulta.REALIZADA);
 
-            assertThatThrownBy(() -> confirmar.executar(consulta.id()))
+            assertThatThrownBy(() -> confirmar.executar(consulta.id(), solicitanteMedico()))
                     .isInstanceOf(TransicaoDeStatusInvalidaException.class);
             assertConsultaIntacta(consulta);
         }
@@ -121,7 +122,7 @@ class CicloDeVidaDaConsultaUseCaseTest {
         @Test
         @DisplayName("confirmacao de consulta inexistente e recusada")
         void confirmacaoDeInexistenteERecusada() {
-            assertThatThrownBy(() -> confirmar.executar(UUID.randomUUID()))
+            assertThatThrownBy(() -> confirmar.executar(UUID.randomUUID(), solicitanteMedico()))
                     .isInstanceOf(ConsultaNaoEncontradaException.class);
         }
     }
