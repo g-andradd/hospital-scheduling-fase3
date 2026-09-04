@@ -223,7 +223,18 @@ Cadeia de filtros: `SecurityFilterChain` stateless, CSRF desabilitado (API), `/a
 }
 ```
 
-Mapa de exceções: `AgendamentoNoPassado` → 422, `AgendamentoForaDoHorizonte` → 422, `DateTimeException` → 400, `ConflitoDeAgenda` → 409, `RecursoNaoEncontrado` → 404, `TransicaoDeStatusInvalida` → 409, `MotivoDeCancelamentoObrigatorio` → 422, `AlteracaoConcorrente` → 409, `IllegalArgumentException` → 400, `MethodArgumentNotValid` → 400, `AccessDenied` → 403, `Authentication` → 401.
+Mapa de exceções: `AgendamentoNoPassado` → 422, `AgendamentoForaDoHorizonte` → 422, `DateTimeException` → 400, `ConflitoDeAgenda` → 409, `RecursoNaoEncontrado` → 404, `TransicaoDeStatusInvalida` → 409, `MotivoDeCancelamentoObrigatorio` → 422, `AlteracaoConcorrente` → 409, `CredencialInvalida` → 401, `AcessoNegado` → 403, `IllegalArgumentException` → 400, `MethodArgumentNotValid` → 400, `AccessDenied` (Spring Security) → 403, `AuthenticationException` → 401.
+
+As recusas de segurança têm `type` próprio e distinto entre si:
+
+| Situação | Status | `type` |
+|---|:---:|---|
+| Credencial ausente, inválida, vencida ou adulterada | 401 | `https://hospital.fiap.br/erros/nao-autenticado` |
+| Autenticado, mas o perfil não alcança a operação | 403 | `https://hospital.fiap.br/erros/acesso-negado` |
+
+Os dois chegam por **dois caminhos diferentes**, e ambos precisam de tratamento. A recusa da cadeia de filtros passa pelo `AuthenticationEntryPoint` e pelo `AccessDeniedHandler`, que respondem antes de a requisição alcançar o `@RestControllerAdvice`. Já a recusa do `@PreAuthorize` é lançada **dentro** da invocação do controller e sobe pelo advice — sem tratador nominal ali, cairia no catch-all e viraria 500: recusa de autorização respondida como falha de servidor.
+
+O detalhe é fixo por categoria e não menciona o que faltou. "Token expirado" informaria que o token já foi válido; "usuário não encontrado" no login transformaria o endpoint em oráculo de e-mails cadastrados.
 
 `RecursoNaoEncontrado` é a **base** de `ConsultaNaoEncontrada`, `PacienteNaoEncontrado` e `MedicoNaoEncontrado`. Mapear a base cobre os três com uma entrada só, e um recurso novo em change futura não exige mexer neste mapa — só herdar. O `detail` do `ProblemDetail` vem da mensagem da exceção concreta, então o cliente continua sabendo qual recurso faltou.
 
