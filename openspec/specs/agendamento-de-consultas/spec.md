@@ -150,6 +150,8 @@ O tamanho de página SHALL ter um teto. Um pedido de página maior que o teto SH
 
 A paginação SHALL ser resolvida pelo armazenamento, que devolve apenas os elementos da página pedida.
 
+O conjunto de consultas visível na listagem SHALL depender do perfil do solicitante. Para um usuário que seja paciente, a listagem SHALL apresentar apenas as consultas de que ele é o titular, independentemente dos filtros informados.
+
 #### Scenario: Recuperação por identificador
 - **WHEN** é solicitada a consulta correspondente a um identificador existente
 - **THEN** a consulta correspondente é devolvida
@@ -159,9 +161,14 @@ A paginação SHALL ser resolvida pelo armazenamento, que devolve apenas os elem
 - **THEN** a operação é recusada com um erro de recurso não encontrado
 
 #### Scenario: Listagem sem filtros
-- **WHEN** as consultas são listadas sem nenhum filtro
+- **WHEN** um solicitante sem recorte por identidade lista consultas sem nenhum filtro
 - **THEN** a primeira página das consultas registradas é devolvida
 - **AND** o total informado corresponde à quantidade de consultas registradas
+
+#### Scenario: Listagem recortada pela identidade do paciente
+- **WHEN** um solicitante que é paciente lista consultas
+- **THEN** apenas as consultas de que ele é o titular são devolvidas
+- **AND** o total informado corresponde apenas a essas consultas
 
 #### Scenario: Listagem filtrada
 - **WHEN** as consultas são listadas com filtro de paciente, de médico, de status ou de intervalo de datas
