@@ -1,6 +1,6 @@
 # Verificação do apply — 2026-09-04
 
-Estado do working tree: implementação concluída, 37/38 tasks. A task 9.6 depende do commit/push e do clone limpo executados pelo Gabriel. Nenhum comando Git foi executado.
+Estado: implementação concluída, 38/38 tasks. O `mvn clean verify` passou também no clone limpo e a saída foi registrada no PR pelo Gabriel. Nenhum comando Git foi executado pelo agente.
 
 ## Gates finais
 
