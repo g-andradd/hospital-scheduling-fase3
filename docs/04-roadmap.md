@@ -325,6 +325,15 @@ tabela de autorização vira um Scenario e um teste.
 
 **Escopo:** teste de contrato cruzado com fixture compartilhado, smoke test e2e, agregação JaCoCo com gate.
 
+**Dívida herdada do M03 — ampliar o `EntradasHostisIT`**
+
+O M03 criou `EntradasHostisIT`, que ataca os endpoints com entradas hostis e exige que nenhuma resposta seja 5xx. Cinco rodadas de revisão automática mostraram que **o teste vale exatamente o que vale a tabela de entradas dele** — cada achado foi uma dimensão que a tabela não cobria: id inexistente com FK, offset de paginação estourando `Integer.MAX_VALUE`, borda de `OffsetDateTime`.
+
+O M10 assume esse teste como trabalho próprio, não remendo:
+- Uma dimensão por tipo de campo — uuid, enum, data, inteiro, texto, corpo — aplicada a **todos** os endpoints por varredura, não caso a caso
+- Achados adiados no M03 entram aqui; consulte os comentários resolvidos dos PRs do M03
+- Considerar geração baseada em propriedades no lugar da tabela fixa, se o prazo permitir
+
 **Notas técnicas obrigatórias**
 - O **fixture JSON do evento fica em `shared-contracts/src/test/resources`** e é usado pelo produtor e pelos dois consumidores. É isso que garante que produtor e consumidor não divirjam — mais valioso que um e2e frágil subindo três aplicações.
 - `scripts/smoke-test.sh`: login → cria consulta → aguarda → verifica notificação → query GraphQL, validando com `jq`, saindo diferente de zero em qualquer falha.
