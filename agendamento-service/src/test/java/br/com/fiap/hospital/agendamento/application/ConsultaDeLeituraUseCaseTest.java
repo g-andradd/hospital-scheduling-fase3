@@ -4,6 +4,7 @@ import static br.com.fiap.hospital.agendamento.Cenario.consultaExistente;
 import static br.com.fiap.hospital.agendamento.Cenario.daquiA;
 import static br.com.fiap.hospital.agendamento.Cenario.haQuanto;
 import static br.com.fiap.hospital.agendamento.Cenario.medico;
+import static br.com.fiap.hospital.agendamento.Cenario.solicitanteMedico;
 import static br.com.fiap.hospital.agendamento.Cenario.paciente;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -61,7 +62,7 @@ class ConsultaDeLeituraUseCaseTest {
         @Test
         @DisplayName("Scenario: Recuperacao por identificador")
         void recuperacaoPorIdentificador() {
-            ConsultaResumo resumo = buscar.executar(futuraDeMaria.id());
+            ConsultaResumo resumo = buscar.executar(futuraDeMaria.id(), solicitanteMedico());
 
             assertThat(resumo.id()).isEqualTo(futuraDeMaria.id());
             assertThat(resumo.pacienteId()).isEqualTo(maria.id());
@@ -70,7 +71,7 @@ class ConsultaDeLeituraUseCaseTest {
         @Test
         @DisplayName("Scenario: Recuperacao de identificador inexistente")
         void recuperacaoDeIdentificadorInexistente() {
-            assertThatThrownBy(() -> buscar.executar(UUID.randomUUID()))
+            assertThatThrownBy(() -> buscar.executar(UUID.randomUUID(), solicitanteMedico()))
                     .isInstanceOf(ConsultaNaoEncontradaException.class)
                     .hasMessageContaining("Consulta nao encontrada");
         }
@@ -83,15 +84,15 @@ class ConsultaDeLeituraUseCaseTest {
         @Test
         @DisplayName("Scenario: Listagem sem filtros devolve todas")
         void listagemSemFiltros() {
-            assertThat(listar.executar(ListarConsultasQuery.semFiltro()).conteudo()).hasSize(3);
-            assertThat(listar.executar(null).conteudo()).hasSize(3);
+            assertThat(listar.executar(ListarConsultasQuery.semFiltro(), solicitanteMedico()).conteudo()).hasSize(3);
+            assertThat(listar.executar(null, solicitanteMedico()).conteudo()).hasSize(3);
         }
 
         @Test
         @DisplayName("Scenario: Listagem filtrada — por paciente")
         void listagemFiltradaPorPaciente() {
             var resultado = listar.executar(ListarConsultasQuery.filtrando(
-                    maria.id(), null, null, null, null));
+                    maria.id(), null, null, null, null), solicitanteMedico());
 
             assertThat(resultado.conteudo()).extracting(ConsultaResumo::id)
                     .containsExactlyInAnyOrder(futuraDeMaria.id(), canceladaDeMaria.id());
@@ -101,7 +102,7 @@ class ConsultaDeLeituraUseCaseTest {
         @DisplayName("Scenario: Listagem filtrada — por medico")
         void listagemFiltradaPorMedico() {
             var resultado = listar.executar(ListarConsultasQuery.filtrando(
-                    null, joao.id(), null, null, null));
+                    null, joao.id(), null, null, null), solicitanteMedico());
 
             assertThat(resultado.conteudo()).extracting(ConsultaResumo::id)
                     .containsExactly(futuraDeMaria.id());
@@ -112,7 +113,7 @@ class ConsultaDeLeituraUseCaseTest {
         void listagemFiltradaPorStatus() {
             var resultado = listar.executar(ListarConsultasQuery.filtrando(
                     null, null, Set.of(StatusConsulta.CANCELADA, StatusConsulta.REALIZADA),
-                    null, null));
+                    null, null), solicitanteMedico());
 
             assertThat(resultado.conteudo()).extracting(ConsultaResumo::id)
                     .containsExactlyInAnyOrder(canceladaDeMaria.id(), passadaDeJose.id());
@@ -122,7 +123,7 @@ class ConsultaDeLeituraUseCaseTest {
         @DisplayName("Scenario: Listagem filtrada — por intervalo de datas")
         void listagemFiltradaPorIntervalo() {
             var resultado = listar.executar(ListarConsultasQuery.filtrando(
-                    null, null, null, daquiA(1), daquiA(48)));
+                    null, null, null, daquiA(1), daquiA(48)), solicitanteMedico());
 
             assertThat(resultado.conteudo()).extracting(ConsultaResumo::id)
                     .containsExactly(futuraDeMaria.id());
@@ -132,7 +133,7 @@ class ConsultaDeLeituraUseCaseTest {
         @DisplayName("Scenario: Listagem filtrada — criterios combinados com E")
         void listagemComCriteriosCombinados() {
             var resultado = listar.executar(ListarConsultasQuery.filtrando(
-                    maria.id(), joao.id(), Set.of(StatusConsulta.AGENDADA), null, null));
+                    maria.id(), joao.id(), Set.of(StatusConsulta.AGENDADA), null, null), solicitanteMedico());
 
             assertThat(resultado.conteudo()).extracting(ConsultaResumo::id)
                     .containsExactly(futuraDeMaria.id());
@@ -142,7 +143,7 @@ class ConsultaDeLeituraUseCaseTest {
         @DisplayName("Scenario: Listagem sem resultados devolve lista vazia, sem erro")
         void listagemSemResultados() {
             var resultado = listar.executar(ListarConsultasQuery.filtrando(
-                    UUID.randomUUID(), null, null, null, null));
+                    UUID.randomUUID(), null, null, null, null), solicitanteMedico());
 
             assertThat(resultado.conteudo()).isEmpty();
             assertThat(resultado.total()).isZero();

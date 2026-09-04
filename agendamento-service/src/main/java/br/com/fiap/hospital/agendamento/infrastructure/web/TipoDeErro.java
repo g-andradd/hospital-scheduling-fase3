@@ -18,6 +18,12 @@ import org.springframework.http.HttpStatus;
  */
 public enum TipoDeErro {
 
+    NAO_AUTENTICADO(
+            "nao-autenticado", "Nao autenticado", HttpStatus.UNAUTHORIZED),
+
+    ACESSO_NEGADO(
+            "acesso-negado", "Acesso negado", HttpStatus.FORBIDDEN),
+
     AGENDAMENTO_NO_PASSADO(
             "agendamento-no-passado", "Agendamento no passado", HttpStatus.UNPROCESSABLE_ENTITY),
 

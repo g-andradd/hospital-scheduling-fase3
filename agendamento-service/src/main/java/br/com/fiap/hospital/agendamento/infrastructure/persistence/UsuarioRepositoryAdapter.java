@@ -46,4 +46,22 @@ public class UsuarioRepositoryAdapter implements UsuarioRepositoryPort {
     public Optional<Usuario> buscarUsuarioPorId(UUID id) {
         return usuarios.findById(id).map(mapper::paraDominio);
     }
+
+    @Override
+    public Optional<Usuario> buscarUsuarioPorEmail(String email) {
+        // O e-mail e normalizado para minusculas pelo value object; a busca acompanha.
+        return email == null
+                ? Optional.empty()
+                : usuarios.findByEmail(email.trim().toLowerCase()).map(mapper::paraDominio);
+    }
+
+    @Override
+    public Optional<Paciente> buscarPacientePorUsuario(UUID usuarioId) {
+        return pacientes.findByUsuarioId(usuarioId).map(mapper::paraDominio);
+    }
+
+    @Override
+    public Optional<Medico> buscarMedicoPorUsuario(UUID usuarioId) {
+        return medicos.findByUsuarioId(usuarioId).map(mapper::paraDominio);
+    }
 }

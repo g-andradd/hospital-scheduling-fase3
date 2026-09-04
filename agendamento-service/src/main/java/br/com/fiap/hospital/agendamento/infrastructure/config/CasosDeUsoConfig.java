@@ -1,6 +1,7 @@
 package br.com.fiap.hospital.agendamento.infrastructure.config;
 
 import br.com.fiap.hospital.agendamento.application.AgendarConsultaUseCase;
+import br.com.fiap.hospital.agendamento.application.AutenticarUsuarioUseCase;
 import br.com.fiap.hospital.agendamento.application.AtualizarConsultaUseCase;
 import br.com.fiap.hospital.agendamento.application.BuscarConsultaPorIdUseCase;
 import br.com.fiap.hospital.agendamento.application.CancelarConsultaUseCase;
@@ -8,11 +9,13 @@ import br.com.fiap.hospital.agendamento.application.ConfirmarConsultaUseCase;
 import br.com.fiap.hospital.agendamento.application.ListarConsultasUseCase;
 import br.com.fiap.hospital.agendamento.domain.port.ConsultaRepositoryPort;
 import br.com.fiap.hospital.agendamento.domain.port.EventPublisherPort;
+import br.com.fiap.hospital.agendamento.domain.port.VerificadorDeSenhaPort;
 import br.com.fiap.hospital.agendamento.infrastructure.messaging.EventPublisherLogAdapter;
 import br.com.fiap.hospital.agendamento.domain.port.UsuarioRepositoryPort;
 import java.time.Clock;
 import java.time.ZoneId;
 import br.com.fiap.hospital.agendamento.infrastructure.transacao.AgendarConsultaUseCaseTransacional;
+import br.com.fiap.hospital.agendamento.infrastructure.transacao.AutenticarUsuarioUseCaseTransacional;
 import br.com.fiap.hospital.agendamento.infrastructure.transacao.AtualizarConsultaUseCaseTransacional;
 import br.com.fiap.hospital.agendamento.infrastructure.transacao.BuscarConsultaPorIdUseCaseTransacional;
 import br.com.fiap.hospital.agendamento.infrastructure.transacao.CancelarConsultaUseCaseTransacional;
@@ -94,5 +97,12 @@ public class CasosDeUsoConfig {
     @Bean
     public ListarConsultasUseCaseTransacional listarConsultas(ConsultaRepositoryPort consultas) {
         return new ListarConsultasUseCaseTransacional(new ListarConsultasUseCase(consultas));
+    }
+
+    @Bean
+    public AutenticarUsuarioUseCaseTransacional autenticarUsuario(
+            UsuarioRepositoryPort usuarios, VerificadorDeSenhaPort senhas) {
+        return new AutenticarUsuarioUseCaseTransacional(
+                new AutenticarUsuarioUseCase(usuarios, senhas));
     }
 }

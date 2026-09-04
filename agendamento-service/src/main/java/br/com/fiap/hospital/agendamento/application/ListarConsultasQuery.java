@@ -37,6 +37,12 @@ public record ListarConsultasQuery(
                 null, null, null, null, null, 0, FiltroDeConsultas.TAMANHO_PADRAO);
     }
 
+    /** Substitui o filtro de paciente pelo identificador informado. */
+    ListarConsultasQuery recortadaPara(java.util.UUID proprioPacienteId) {
+        return new ListarConsultasQuery(
+                proprioPacienteId, medicoId, status, de, ate, pagina, tamanho);
+    }
+
     FiltroDeConsultas paraFiltro() {
         return new FiltroDeConsultas(pacienteId, medicoId, status, de, ate, pagina, tamanho);
     }

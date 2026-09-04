@@ -54,6 +54,9 @@ import org.springframework.test.web.servlet.MockMvc;
  * integracao do M02.
  */
 @WebMvcTest(ConsultaController.class)
+@org.springframework.boot.autoconfigure.ImportAutoConfiguration(exclude = {
+        org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration.class,
+        org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration.class})
 @Import(ConsultaControllerTest.RelogioFixo.class)
 @DisplayName("ConsultaController")
 class ConsultaControllerTest {
@@ -85,6 +88,29 @@ class ConsultaControllerTest {
      * alcanca todas: sem isto, um {@code willThrow} declarado nos testes de erro vaza
      * para os de sucesso.
      */
+    /**
+     * Este teste verifica o contrato HTTP e a forma dos erros, nao a autorizacao. Quem
+     * cobre a matriz de perfis e a regra de propriedade e o MatrizDeAutorizacaoIT, com
+     * token real contra Postgres — aqui os filtros de seguranca sao dispensados e a
+     * identidade e posta direto no contexto.
+     */
+    @org.junit.jupiter.api.BeforeEach
+    void autenticarComoMedico() {
+        var principal = new br.com.fiap.hospital.security.UsuarioAutenticado(
+                UUID.randomUUID(), "medico@hospital.com", "MEDICO", null, UUID.randomUUID());
+        var autenticacao = new org.springframework.security.authentication
+                .UsernamePasswordAuthenticationToken(principal, null,
+                java.util.List.of(new org.springframework.security.core.authority
+                        .SimpleGrantedAuthority("ROLE_MEDICO")));
+        org.springframework.security.core.context.SecurityContextHolder.getContext()
+                .setAuthentication(autenticacao);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void limparContexto() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
     @org.junit.jupiter.api.BeforeEach
     void reiniciarDubles() {
         org.mockito.Mockito.reset(agendar, atualizar, confirmar, cancelar, buscar, listar);
@@ -154,7 +180,7 @@ class ConsultaControllerTest {
         @Test
         @DisplayName("Scenario: Confirmação bem-sucedida")
         void confirmacao() throws Exception {
-            given(confirmar.executar(any())).willReturn(resumo(StatusConsulta.CONFIRMADA, null));
+            given(confirmar.executar(any(), any())).willReturn(resumo(StatusConsulta.CONFIRMADA, null));
 
             mvc.perform(patch("/api/v1/consultas/" + ID + "/confirmar"))
                     .andExpect(status().isOk())
@@ -181,7 +207,7 @@ class ConsultaControllerTest {
         @Test
         @DisplayName("Scenario: Recuperação bem-sucedida")
         void recuperacao() throws Exception {
-            given(buscar.executar(ID)).willReturn(resumo(StatusConsulta.AGENDADA, null));
+            given(buscar.executar(any(), any())).willReturn(resumo(StatusConsulta.AGENDADA, null));
 
             mvc.perform(get("/api/v1/consultas/" + ID))
                     .andExpect(status().isOk())
@@ -196,7 +222,7 @@ class ConsultaControllerTest {
         @Test
         @DisplayName("Scenario: Listagem sem filtros")
         void semFiltros() throws Exception {
-            given(listar.executar(any())).willReturn(new Pagina<>(
+            given(listar.executar(any(), any())).willReturn(new Pagina<>(
                     List.of(resumo(StatusConsulta.AGENDADA, null)), 0, 20, 1));
 
             mvc.perform(get("/api/v1/consultas"))
@@ -209,7 +235,7 @@ class ConsultaControllerTest {
         @Test
         @DisplayName("Scenario: Listagem sem resultados")
         void semResultados() throws Exception {
-            given(listar.executar(any())).willReturn(Pagina.vazia(0, 20));
+            given(listar.executar(any(), any())).willReturn(Pagina.vazia(0, 20));
 
             mvc.perform(get("/api/v1/consultas").param("pacienteId", UUID.randomUUID().toString()))
                     .andExpect(status().isOk())
@@ -220,7 +246,7 @@ class ConsultaControllerTest {
         @Test
         @DisplayName("Scenario: Tamanho de página acima do teto — a resposta informa o aplicado")
         void tetoAplicadoAparece() throws Exception {
-            given(listar.executar(any())).willReturn(new Pagina<>(List.of(), 0, 100, 0));
+            given(listar.executar(any(), any())).willReturn(new Pagina<>(List.of(), 0, 100, 0));
 
             mvc.perform(get("/api/v1/consultas").param("tamanho", "100000"))
                     .andExpect(status().isOk())
@@ -232,7 +258,7 @@ class ConsultaControllerTest {
         @Test
         @DisplayName("Scenario: Navegação entre páginas")
         void navegacaoEntrePaginas() throws Exception {
-            given(listar.executar(any())).willReturn(new Pagina<>(
+            given(listar.executar(any(), any())).willReturn(new Pagina<>(
                     List.of(resumo(StatusConsulta.AGENDADA, null)), 1, 2, 5));
 
             mvc.perform(get("/api/v1/consultas").param("pagina", "1").param("tamanho", "2"))
@@ -244,7 +270,7 @@ class ConsultaControllerTest {
         @Test
         @DisplayName("Scenario: Listagem filtrada — os filtros chegam ao caso de uso")
         void filtrosChegamAoCasoDeUso() throws Exception {
-            given(listar.executar(any())).willReturn(Pagina.vazia(0, 20));
+            given(listar.executar(any(), any())).willReturn(Pagina.vazia(0, 20));
             UUID paciente = UUID.randomUUID();
 
             mvc.perform(get("/api/v1/consultas")
@@ -256,7 +282,7 @@ class ConsultaControllerTest {
 
             org.mockito.ArgumentCaptor<ListarConsultasQuery> capturado =
                     org.mockito.ArgumentCaptor.forClass(ListarConsultasQuery.class);
-            org.mockito.Mockito.verify(listar).executar(capturado.capture());
+            org.mockito.Mockito.verify(listar).executar(capturado.capture(), any());
 
             org.assertj.core.api.Assertions.assertThat(capturado.getValue().pacienteId())
                     .isEqualTo(paciente);
@@ -431,7 +457,7 @@ class ConsultaControllerTest {
         @Test
         @DisplayName("a base cobre também a consulta não encontrada")
         void consultaNaoEncontrada() throws Exception {
-            willThrow(new ConsultaNaoEncontradaException(ID)).given(buscar).executar(any());
+            willThrow(new ConsultaNaoEncontradaException(ID)).given(buscar).executar(any(), any());
 
             mvc.perform(get("/api/v1/consultas/" + ID))
                     .andExpect(status().isNotFound())
@@ -444,7 +470,7 @@ class ConsultaControllerTest {
         void transicaoInvalida() throws Exception {
             willThrow(new TransicaoDeStatusInvalidaException(
                     StatusConsulta.CANCELADA, StatusConsulta.CONFIRMADA))
-                    .given(confirmar).executar(any());
+                    .given(confirmar).executar(any(), any());
 
             mvc.perform(patch("/api/v1/consultas/" + ID + "/confirmar"))
                     .andExpect(status().isConflict())
@@ -537,7 +563,7 @@ class ConsultaControllerTest {
         @DisplayName("Scenario: Falha inesperada não vaza detalhe interno")
         void falhaInesperada() throws Exception {
             willThrow(new IllegalStateException("NullPointer em ConsultaRepositoryAdapter linha 42"))
-                    .given(buscar).executar(any());
+                    .given(buscar).executar(any(), any());
 
             mvc.perform(get("/api/v1/consultas/" + ID))
                     .andExpect(status().isInternalServerError())
@@ -554,7 +580,7 @@ class ConsultaControllerTest {
         @Test
         @DisplayName("Scenario: Correlação presente em toda resposta de erro")
         void correlacaoPresente() throws Exception {
-            willThrow(new ConsultaNaoEncontradaException(ID)).given(buscar).executar(any());
+            willThrow(new ConsultaNaoEncontradaException(ID)).given(buscar).executar(any(), any());
 
             mvc.perform(get("/api/v1/consultas/" + ID))
                     .andExpect(jsonPath("$.correlationId").isNotEmpty())
@@ -565,7 +591,7 @@ class ConsultaControllerTest {
         @Test
         @DisplayName("o correlationId recebido no cabeçalho é o que volta na resposta")
         void correlacaoRecebidaEPreservada() throws Exception {
-            willThrow(new ConsultaNaoEncontradaException(ID)).given(buscar).executar(any());
+            willThrow(new ConsultaNaoEncontradaException(ID)).given(buscar).executar(any(), any());
 
             mvc.perform(get("/api/v1/consultas/" + ID).header("X-Correlation-Id", "id-do-cliente"))
                     .andExpect(jsonPath("$.correlationId").value("id-do-cliente"))

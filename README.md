@@ -185,12 +185,73 @@ campo `tamanho` da resposta informa o valor aplicado.
 Erros seguem RFC 7807, com `correlationId` e `timestamp`. Enviar `X-Correlation-Id` na
 requisição preserva o seu identificador na resposta e no log.
 
-> ### ⚠️ Os endpoints estão abertos
->
-> Não há autenticação nem autorização nesta versão. A matriz de perfis de
-> [docs/02-especificacao-funcional.md](docs/02-especificacao-funcional.md) §3 é aplicada
-> na entrega seguinte, junto com o `POST /auth/login`. Não exponha este serviço fora da
-> máquina até lá.
+### Autenticação
+
+Todos os endpoints sob `/api/**` exigem um token. São públicos apenas `POST /auth/login`,
+`/actuator/health`, `/v3/api-docs` e o Swagger UI. Qualquer outro caminho é negado por
+padrão — rota nova que ninguém liberou fica inacessível, o que é falha visível em vez de
+brecha.
+
+```bash
+curl -s -X POST http://localhost:8081/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"medico@hospital.com","senha":"Senha@123"}'
+```
+
+A resposta traz `token`, `expiraEmSegundos` e `perfil`. Use o token como `Bearer` nas
+demais chamadas:
+
+```bash
+curl -s http://localhost:8081/api/v1/consultas \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+No Swagger UI, o botão **Authorize** aceita o token e o aplica a todas as operações.
+
+O segredo de assinatura vem de `JWT_SECRET`, lido do ambiente. A aplicação **não sobe**
+com o segredo ausente ou com menos de 32 bytes — falha na partida em vez de assinatura
+fraca em produção. O token vale 8 horas e não é revogável; o porquê está em
+[ADR-005](docs/adr/ADR-005-jwt-stateless.md).
+
+### Quem pode o quê
+
+| Endpoint | Método | MEDICO | ENFERMEIRO | PACIENTE |
+|---|---|:---:|:---:|:---:|
+| `/auth/login` | POST | público | público | público |
+| `/api/v1/consultas` | POST | ✅ | ✅ | ❌ 403 |
+| `/api/v1/consultas/{id}` | PUT | ✅ | ✅ | ❌ 403 |
+| `/api/v1/consultas/{id}/cancelar` | PATCH | ✅ | ✅ | ❌ 403 |
+| `/api/v1/consultas/{id}/confirmar` | PATCH | ✅ | ✅ | ✅ (só a própria) |
+| `/api/v1/consultas/{id}` | GET | ✅ | ✅ | ✅ (só a própria) |
+| `/api/v1/consultas` | GET | ✅ | ✅ | ✅ (filtro forçado ao próprio id) |
+
+O `pacienteId` que um paciente enviar na listagem é **descartado** e substituído pelo
+dele: recorte é permissão, não filtro. A tabela normativa vive em
+[docs/02-especificacao-funcional.md](docs/02-especificacao-funcional.md) §3 e é lida em
+tempo de execução pelos testes — acrescentar uma linha lá produz três casos que falham até
+serem implementados ([ADR-004](docs/adr/ADR-004-matriz-de-autorizacao.md)).
+
+Recusas seguem o mesmo contrato de erro do resto da API: **401** para credencial ausente
+ou inválida, **403** para perfil sem permissão, com `type` distinto e `correlationId`. O
+detalhe é fixo por categoria e não diz o que faltou — "token expirado" informaria que o
+token já foi válido.
+
+### Credenciais de demonstração
+
+Com o profile `demo` ativo (`SPRING_PROFILES_ACTIVE=demo`), uma migration carrega quatro
+usuários, todos com a senha `Senha@123`:
+
+| Perfil | E-mail |
+|---|---|
+| MEDICO | `medico@hospital.com` |
+| ENFERMEIRO | `enfermeiro@hospital.com` |
+| PACIENTE | `paciente@hospital.com` |
+| PACIENTE (segundo, para ver o 403 de propriedade) | `paciente2@hospital.com` |
+
+> **Sem o profile `demo`, nenhum desses usuários existe.** O seed vive em
+> `db/demo`, um diretório que só entra em `spring.flyway.locations` sob esse profile —
+> não é uma migration desabilitada por condicional, é um arquivo que o Flyway nem
+> enxerga. As senhas estão no repositório apenas como hash BCrypt.
 
 ## Executar a aplicação completa
 

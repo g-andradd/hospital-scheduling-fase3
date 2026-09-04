@@ -8,6 +8,7 @@ import br.com.fiap.hospital.agendamento.domain.Medico;
 import br.com.fiap.hospital.agendamento.domain.Paciente;
 import br.com.fiap.hospital.agendamento.domain.PerfilUsuario;
 import br.com.fiap.hospital.agendamento.domain.PeriodoConsulta;
+import br.com.fiap.hospital.agendamento.domain.SolicitanteAutenticado;
 import br.com.fiap.hospital.agendamento.domain.StatusConsulta;
 import br.com.fiap.hospital.agendamento.domain.Usuario;
 import java.time.Clock;
@@ -95,6 +96,27 @@ public final class Cenario {
     /** Id avulso, para cenarios que nao passam pelo caso de uso de agendamento. */
     public static UUID enfermeiroId() {
         return enfermeiro().id();
+    }
+
+    /**
+     * Solicitante sem recorte por identidade.
+     *
+     * <p>Os testes anteriores ao M04 nao tinham nocao de quem pedia, e um perfil sem
+     * recorte preserva exatamente o que eles verificavam. A regra de propriedade tem
+     * testes proprios.
+     */
+    public static SolicitanteAutenticado solicitanteMedico() {
+        return new SolicitanteAutenticado(UUID.randomUUID(), PerfilUsuario.MEDICO, null);
+    }
+
+    public static SolicitanteAutenticado solicitanteEnfermeiro() {
+        return new SolicitanteAutenticado(UUID.randomUUID(), PerfilUsuario.ENFERMEIRO, null);
+    }
+
+    /** Solicitante paciente, titular do paciente informado. */
+    public static SolicitanteAutenticado solicitantePaciente(Paciente paciente) {
+        return new SolicitanteAutenticado(
+                paciente.usuario().id(), PerfilUsuario.PACIENTE, paciente.id());
     }
 
     public static PeriodoConsulta periodo(OffsetDateTime inicio) {

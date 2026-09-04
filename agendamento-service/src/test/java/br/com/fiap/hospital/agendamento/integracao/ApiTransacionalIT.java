@@ -12,6 +12,8 @@ import br.com.fiap.hospital.agendamento.infrastructure.persistence.repository.Co
 import br.com.fiap.hospital.agendamento.infrastructure.persistence.repository.MedicoJpaRepository;
 import br.com.fiap.hospital.agendamento.infrastructure.persistence.repository.PacienteJpaRepository;
 import br.com.fiap.hospital.agendamento.infrastructure.persistence.repository.UsuarioJpaRepository;
+import br.com.fiap.hospital.security.JwtService;
+import br.com.fiap.hospital.security.UsuarioAutenticado;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -46,6 +48,7 @@ class ApiTransacionalIT {
     }
 
     @Autowired private TestRestTemplate rest;
+    @Autowired private JwtService jwtService;
     @Autowired private ConsultaJpaRepository consultaJpa;
     @Autowired private PacienteJpaRepository pacienteJpa;
     @Autowired private MedicoJpaRepository medicoJpa;
@@ -56,6 +59,7 @@ class ApiTransacionalIT {
     private UUID registranteId;
     private UUID consultaId;
     private OffsetDateTime inicioOriginal;
+    private String tokenMedico;
 
     @BeforeEach
     void preparar() {
@@ -80,6 +84,9 @@ class ApiTransacionalIT {
                 "api.enfermeiro@hospital.com", "$2a$10$h", PerfilUsuario.ENFERMEIRO, true,
                 OffsetDateTime.now())).getId();
 
+        tokenMedico = jwtService.emitir(new UsuarioAutenticado(
+                um.getId(), um.getEmail(), "MEDICO", null, medicoId));
+
         inicioOriginal = OffsetDateTime.now().plusDays(3).withNano(0);
         ConsultaEntity existente =
                 new ConsultaEntity(UUID.randomUUID(), pacienteId, medicoId, registranteId);
@@ -95,9 +102,11 @@ class ApiTransacionalIT {
         consultaJpa.saveAndFlush(conflitante);
     }
 
-    private static HttpEntity<String> json(String corpo) {
+    /** Toda chamada leva credencial de MEDICO: aqui o objeto de estudo e a transacao. */
+    private HttpEntity<String> json(String corpo) {
         HttpHeaders cabecalhos = new HttpHeaders();
         cabecalhos.setContentType(MediaType.APPLICATION_JSON);
+        cabecalhos.setBearerAuth(tokenMedico);
         return new HttpEntity<>(corpo, cabecalhos);
     }
 
@@ -138,8 +147,9 @@ class ApiTransacionalIT {
     @Test
     @DisplayName("registro devolve 201 e a consulta fica no banco")
     void registroPersiste() {
-        ResponseEntity<String> resposta = rest.postForEntity(
+        ResponseEntity<String> resposta = rest.exchange(
                 "/api/v1/consultas",
+                HttpMethod.POST,
                 json("""
                         {"pacienteId":"%s","medicoId":"%s","registradoPorId":"%s","dataHora":"%s"}
                         """.formatted(pacienteId, medicoId, registranteId,
@@ -152,10 +162,28 @@ class ApiTransacionalIT {
     }
 
     @Test
+    @DisplayName("sem credencial, a mesma escrita nao chega ao dominio")
+    void escritaSemCredencialERecusada() {
+        HttpHeaders semToken = new HttpHeaders();
+        semToken.setContentType(MediaType.APPLICATION_JSON);
+
+        ResponseEntity<String> resposta = rest.exchange(
+                "/api/v1/consultas/" + consultaId,
+                HttpMethod.PUT,
+                new HttpEntity<>("{\"observacoes\":\"anonimo\"}", semToken),
+                String.class);
+
+        assertThat(resposta.getStatusCode().value()).isEqualTo(401);
+        assertThat(consultaJpa.findById(consultaId).orElseThrow().getObservacoes())
+                .as("a recusa acontece antes de qualquer escrita")
+                .isEqualTo("observacao clinica");
+    }
+
+    @Test
     @DisplayName("a listagem pagina contra o banco e respeita o teto")
     void listagemPaginaContraOBanco() {
-        ResponseEntity<String> resposta = rest.getForEntity(
-                "/api/v1/consultas?tamanho=100000", String.class);
+        ResponseEntity<String> resposta = rest.exchange(
+                "/api/v1/consultas?tamanho=100000", HttpMethod.GET, json(null), String.class);
 
         assertThat(resposta.getStatusCode().is2xxSuccessful()).isTrue();
         assertThat(resposta.getBody())

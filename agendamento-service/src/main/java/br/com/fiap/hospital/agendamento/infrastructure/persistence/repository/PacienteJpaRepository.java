@@ -4,4 +4,7 @@ import br.com.fiap.hospital.agendamento.infrastructure.persistence.entity.Pacien
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface PacienteJpaRepository extends JpaRepository<PacienteEntity, UUID> {}
+public interface PacienteJpaRepository extends JpaRepository<PacienteEntity, UUID> {
+
+    java.util.Optional<PacienteEntity> findByUsuarioId(java.util.UUID usuarioId);
+}

@@ -1,0 +1,8 @@
+# Perfil de demonstracao.
+#
+# A unica diferenca que importa esta abaixo: o Flyway passa a enxergar db/demo, onde
+# vive o seed. Sem este perfil o diretorio nao entra em locations, e as linhas nao sao
+# inseridas por caminho nenhum — nao ha codigo de seed carregado que possa errar um if.
+spring:
+  flyway:
+    locations: classpath:db/migration,classpath:db/demo
