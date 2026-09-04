@@ -18,7 +18,7 @@
 |---|---|---|
 | **Product Owner / Revisor** | Gabriel | Aprova specs, revisa PRs, decide trade-offs, valida a entrega. **É o único que executa Git**: commits, pushes, merges, tags e PRs |
 | **Gestor / Engenheiro de Prompt** | Claude (chat) | Mantém o charter, o `openspec/config.yaml` e o roadmap; escreve o enunciado de cada `/opsx:propose`; audita entregas contra os critérios de aceite |
-| **Engenheiro de Software** | Claude Code | Roda `/opsx:propose`, `/opsx:apply` e `/opsx:archive`; implementa, testa, mantém o build verde. **Não executa Git** — entrega os comandos prontos ao Gabriel |
+| **Engenheiro de Software** | Codex (Claude Code no M00–M04) | Roda `/opsx:propose`, `/opsx:apply` e `/opsx:archive`; implementa, testa, mantém o build verde. **Não executa Git** — entrega os comandos prontos ao Gabriel |
 
 **Regra de ouro:** nenhuma linha de código é escrita sem uma proposta aprovada. Se o Claude Code precisar tomar uma decisão que a spec não cobre, ele **para e pergunta** em vez de improvisar.
 

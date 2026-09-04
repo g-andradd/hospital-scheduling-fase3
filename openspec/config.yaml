@@ -95,6 +95,15 @@ context: |
   Alvo: 40 linhas. Se passar disso, corte explicacao, nao conteudo.
   Quando parar para perguntar, mande SO a pergunta e as opcoes — nada mais.
 
+  PAPEL DE ENGENHEIRO DE SOFTWARE
+  Quem implementa e' a ferramenta de IA em uso, hoje o CODEX. Os changes M00 a M04
+  foram implementados pelo Claude Code; mencoes nominais nos documentos se referem
+  ao papel, nao ao produto.
+  Nao ha mais revisor automatico independente nos PRs: o Codex, que exercia esse
+  papel, passou a implementar. A verificacao recai sobre a auditoria do gestor e
+  sobre as coberturas estruturais do projeto. Trate qualquer omissao que uma dessas
+  coberturas poderia pegar como defeito seu, nao como algo que a revisao apanha depois.
+
   RESTRIÇÕES
   Sem frontend. Sem provedor real de SMS/e-mail (porta com adaptador log e SMTP/Mailpit).
   Sem deploy em nuvem — docker compose up é o ambiente de entrega.

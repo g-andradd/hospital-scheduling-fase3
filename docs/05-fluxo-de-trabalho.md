@@ -20,6 +20,12 @@ Duas regras que não mudam:
 
 ---
 
+> **"Claude Code" neste documento significa o papel, não o produto.** A ferramenta que exerce o papel de engenheiro de software mudou: os changes M00 a M04 foram implementados pelo Claude Code; **a partir do M05 o papel é do Codex**. Onde se lê o nome antigo, leia "a ferramenta que implementa".
+>
+> Requisito para qualquer ferramenta nesse papel: os comandos do OpenSpec precisam estar instalados para ela no repositório. Trocar de ferramenta exige rodar `openspec init` de novo e selecioná-la — sem isso o ciclo `propose → apply → archive` simplesmente não existe do lado dela.
+>
+> **Consequência da troca, registrada de propósito.** O Codex vinha atuando como revisor automático dos PRs e foi ele quem encontrou os defeitos que a revisão humana e a da própria ferramenta implementadora deixaram passar — mutação antes de validação, double-booking sob concorrência, e uma família inteira de entradas não validadas virando 500. Com o Codex implementando e sem revisor independente no lugar dele, essa camada deixou de existir. Restam a auditoria do gestor e as três coberturas estruturais do projeto: `CoberturaDeAutorizacaoTest`, `CoberturaDoMapaDeErrosTest` e `EntradasHostisIT`. Ampliá-las no M10 deixou de ser melhoria e passou a ser compensação.
+
 ## 2. O ciclo de uma change
 
 Na coluna da direita, **tudo é executado pelo Gabriel**. O Claude Code atua apenas nas duas colunas da esquerda e entrega os comandos.
