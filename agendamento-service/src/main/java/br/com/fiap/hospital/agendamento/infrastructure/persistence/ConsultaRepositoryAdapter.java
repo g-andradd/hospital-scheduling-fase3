@@ -2,6 +2,7 @@ package br.com.fiap.hospital.agendamento.infrastructure.persistence;
 
 import br.com.fiap.hospital.agendamento.domain.Consulta;
 import br.com.fiap.hospital.agendamento.domain.FiltroDeConsultas;
+import br.com.fiap.hospital.agendamento.domain.Pagina;
 import br.com.fiap.hospital.agendamento.domain.PeriodoConsulta;
 import br.com.fiap.hospital.agendamento.domain.exception.AlteracaoConcorrenteException;
 import br.com.fiap.hospital.agendamento.domain.port.ConsultaRepositoryPort;
@@ -12,6 +13,8 @@ import br.com.fiap.hospital.agendamento.infrastructure.persistence.repository.Co
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Repository;
 
@@ -75,9 +78,18 @@ public class ConsultaRepositoryAdapter implements ConsultaRepositoryPort {
     }
 
     @Override
-    public List<Consulta> listar(FiltroDeConsultas filtro) {
-        return repositorio.findAll(ConsultaSpecifications.de(filtro)).stream()
-                .map(mapper::paraDominio)
-                .toList();
+    public Pagina<Consulta> listar(FiltroDeConsultas filtro) {
+        // A ordenacao e explicita porque paginacao sem ordem estavel repete e omite
+        // elementos entre paginas consecutivas.
+        var pagina = repositorio.findAll(
+                ConsultaSpecifications.de(filtro),
+                PageRequest.of(filtro.pagina(), filtro.tamanho(),
+                        Sort.by(Sort.Direction.ASC, "dataHora", "id")));
+
+        return new Pagina<>(
+                pagina.getContent().stream().map(mapper::paraDominio).toList(),
+                filtro.pagina(),
+                filtro.tamanho(),
+                pagina.getTotalElements());
     }
 }

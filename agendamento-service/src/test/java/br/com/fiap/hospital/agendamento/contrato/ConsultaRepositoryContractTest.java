@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import br.com.fiap.hospital.agendamento.domain.Consulta;
 import br.com.fiap.hospital.agendamento.domain.FiltroDeConsultas;
+import br.com.fiap.hospital.agendamento.domain.Pagina;
 import br.com.fiap.hospital.agendamento.domain.PeriodoConsulta;
 import br.com.fiap.hospital.agendamento.domain.StatusConsulta;
 import br.com.fiap.hospital.agendamento.domain.port.ConsultaRepositoryPort;
@@ -219,85 +220,162 @@ public abstract class ConsultaRepositoryContractTest {
     }
 
     @Nested
-    @DisplayName("listagem")
+    @DisplayName("listagem paginada")
     class Listagem {
 
+        private FiltroDeConsultas filtro(
+                UUID pacienteId, UUID medicoId, Set<StatusConsulta> status,
+                OffsetDateTime de, OffsetDateTime ate) {
+            return new FiltroDeConsultas(pacienteId, medicoId, status, de, ate,
+                    0, FiltroDeConsultas.TAMANHO_PADRAO);
+        }
+
         @Test
-        @DisplayName("sem filtros devolve tudo")
+        @DisplayName("Scenario: Listagem sem filtros")
         void semFiltrosDevolveTudo() {
             gravar(pacienteId(), medicoId(), daquiA(24), StatusConsulta.AGENDADA);
             gravar(outroPacienteId(), outroMedicoId(), daquiA(48), StatusConsulta.CANCELADA);
 
-            assertThat(repositorio().listar(FiltroDeConsultas.vazio())).hasSize(2);
+            Pagina<Consulta> pagina = repositorio().listar(FiltroDeConsultas.vazio());
+
+            assertThat(pagina.conteudo()).hasSize(2);
+            assertThat(pagina.total()).isEqualTo(2);
+            assertThat(pagina.pagina()).isZero();
         }
 
         @Test
-        @DisplayName("filtra por paciente")
+        @DisplayName("Scenario: Listagem filtrada — por paciente")
         void filtraPorPaciente() {
             Consulta minha = gravar(pacienteId(), medicoId(), daquiA(24), StatusConsulta.AGENDADA);
             gravar(outroPacienteId(), outroMedicoId(), daquiA(48), StatusConsulta.AGENDADA);
 
-            assertThat(repositorio().listar(
-                            new FiltroDeConsultas(pacienteId(), null, null, null, null)))
+            assertThat(repositorio().listar(filtro(pacienteId(), null, null, null, null)).conteudo())
                     .extracting(Consulta::id)
                     .containsExactly(minha.id());
         }
 
         @Test
-        @DisplayName("filtra por medico")
+        @DisplayName("Scenario: Listagem filtrada — por medico")
         void filtraPorMedico() {
             Consulta dele = gravar(pacienteId(), medicoId(), daquiA(24), StatusConsulta.AGENDADA);
             gravar(outroPacienteId(), outroMedicoId(), daquiA(48), StatusConsulta.AGENDADA);
 
-            assertThat(repositorio().listar(
-                            new FiltroDeConsultas(null, medicoId(), null, null, null)))
+            assertThat(repositorio().listar(filtro(null, medicoId(), null, null, null)).conteudo())
                     .extracting(Consulta::id)
                     .containsExactly(dele.id());
         }
 
         @Test
-        @DisplayName("filtra por status")
+        @DisplayName("Scenario: Listagem filtrada — por status")
         void filtraPorStatus() {
             gravar(pacienteId(), medicoId(), daquiA(24), StatusConsulta.AGENDADA);
             Consulta cancelada =
                     gravar(outroPacienteId(), outroMedicoId(), daquiA(48), StatusConsulta.CANCELADA);
 
-            assertThat(repositorio().listar(new FiltroDeConsultas(
-                            null, null, Set.of(StatusConsulta.CANCELADA), null, null)))
+            assertThat(repositorio().listar(
+                            filtro(null, null, Set.of(StatusConsulta.CANCELADA), null, null))
+                    .conteudo())
                     .extracting(Consulta::id)
                     .containsExactly(cancelada.id());
         }
 
         @Test
-        @DisplayName("filtra por intervalo de datas")
+        @DisplayName("Scenario: Listagem filtrada — por intervalo de datas")
         void filtraPorIntervalo() {
             Consulta proxima = gravar(pacienteId(), medicoId(), daquiA(24), StatusConsulta.AGENDADA);
             gravar(outroPacienteId(), outroMedicoId(), daquiA(240), StatusConsulta.AGENDADA);
 
-            assertThat(repositorio().listar(
-                            new FiltroDeConsultas(null, null, null, daquiA(1), daquiA(48))))
+            assertThat(repositorio().listar(filtro(null, null, null, daquiA(1), daquiA(48)))
+                    .conteudo())
                     .extracting(Consulta::id)
                     .containsExactly(proxima.id());
         }
 
         @Test
-        @DisplayName("combina criterios com E")
+        @DisplayName("Scenario: Listagem filtrada — criterios combinados com E")
         void combinaCriteriosComE() {
             gravar(pacienteId(), medicoId(), daquiA(24), StatusConsulta.AGENDADA);
 
-            assertThat(repositorio().listar(new FiltroDeConsultas(
-                            pacienteId(), medicoId(), Set.of(StatusConsulta.CANCELADA), null, null)))
+            assertThat(repositorio().listar(filtro(
+                            pacienteId(), medicoId(), Set.of(StatusConsulta.CANCELADA), null, null))
+                    .conteudo())
                     .isEmpty();
         }
 
         @Test
-        @DisplayName("filtro sem resultado devolve lista vazia")
+        @DisplayName("Scenario: Listagem sem resultados")
         void filtroSemResultado() {
             gravar(pacienteId(), medicoId(), daquiA(24), StatusConsulta.AGENDADA);
 
-            assertThat(repositorio().listar(
-                            new FiltroDeConsultas(UUID.randomUUID(), null, null, null, null)))
-                    .isEmpty();
+            Pagina<Consulta> pagina =
+                    repositorio().listar(filtro(UUID.randomUUID(), null, null, null, null));
+
+            assertThat(pagina.conteudo()).isEmpty();
+            assertThat(pagina.total()).isZero();
+            assertThat(pagina.vazia()).isTrue();
+        }
+
+        @Test
+        @DisplayName("Scenario: Navegacao entre paginas")
+        void navegacaoEntrePaginas() {
+            for (int i = 1; i <= 5; i++) {
+                gravar(pacienteId(), medicoId(), daquiA(i * 24L), StatusConsulta.AGENDADA);
+            }
+
+            var primeira = repositorio().listar(
+                    new FiltroDeConsultas(null, null, null, null, null, 0, 2));
+            var segunda = repositorio().listar(
+                    new FiltroDeConsultas(null, null, null, null, null, 1, 2));
+
+            assertThat(primeira.conteudo()).hasSize(2);
+            assertThat(segunda.conteudo()).hasSize(2);
+            assertThat(primeira.total()).isEqualTo(5);
+            assertThat(primeira.totalDePaginas()).isEqualTo(3);
+            assertThat(primeira.conteudo())
+                    .as("nenhum elemento se repete entre paginas consecutivas")
+                    .doesNotContainAnyElementsOf(segunda.conteudo());
+        }
+
+        @Test
+        @DisplayName("Scenario: Tamanho de pagina acima do teto")
+        void tamanhoAcimaDoTetoEAparado() {
+            gravar(pacienteId(), medicoId(), daquiA(24), StatusConsulta.AGENDADA);
+
+            Pagina<Consulta> pagina = repositorio().listar(
+                    new FiltroDeConsultas(null, null, null, null, null, 0, 100_000));
+
+            assertThat(pagina.tamanho())
+                    .as("o pedido excessivo e aparado, nao recusado")
+                    .isEqualTo(FiltroDeConsultas.TAMANHO_MAXIMO);
+            assertThat(pagina.conteudo()).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("Scenario: Paginacao resolvida na origem")
+        void paginacaoResolvidaNaOrigem() {
+            for (int i = 1; i <= 30; i++) {
+                gravar(pacienteId(), medicoId(), daquiA(i * 24L), StatusConsulta.AGENDADA);
+            }
+
+            Pagina<Consulta> pagina = repositorio().listar(
+                    new FiltroDeConsultas(null, null, null, null, null, 0, 5));
+
+            assertThat(pagina.conteudo())
+                    .as("so os elementos da pagina pedida atravessam a fronteira")
+                    .hasSize(5);
+            assertThat(pagina.total()).isEqualTo(30);
+        }
+
+        @Test
+        @DisplayName("pagina alem do fim devolve conteudo vazio com o total preservado")
+        void paginaAlemDoFim() {
+            gravar(pacienteId(), medicoId(), daquiA(24), StatusConsulta.AGENDADA);
+
+            Pagina<Consulta> pagina = repositorio().listar(
+                    new FiltroDeConsultas(null, null, null, null, null, 9, 10));
+
+            assertThat(pagina.conteudo()).isEmpty();
+            assertThat(pagina.total()).isEqualTo(1);
         }
     }
 }

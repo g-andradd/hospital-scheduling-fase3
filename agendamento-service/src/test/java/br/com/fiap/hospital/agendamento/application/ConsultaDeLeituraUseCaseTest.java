@@ -83,68 +83,69 @@ class ConsultaDeLeituraUseCaseTest {
         @Test
         @DisplayName("Scenario: Listagem sem filtros devolve todas")
         void listagemSemFiltros() {
-            assertThat(listar.executar(ListarConsultasQuery.semFiltro())).hasSize(3);
-            assertThat(listar.executar(null)).hasSize(3);
+            assertThat(listar.executar(ListarConsultasQuery.semFiltro()).conteudo()).hasSize(3);
+            assertThat(listar.executar(null).conteudo()).hasSize(3);
         }
 
         @Test
         @DisplayName("Scenario: Listagem filtrada — por paciente")
         void listagemFiltradaPorPaciente() {
-            var resultado = listar.executar(new ListarConsultasQuery(
+            var resultado = listar.executar(ListarConsultasQuery.filtrando(
                     maria.id(), null, null, null, null));
 
-            assertThat(resultado).extracting(ConsultaResumo::id)
+            assertThat(resultado.conteudo()).extracting(ConsultaResumo::id)
                     .containsExactlyInAnyOrder(futuraDeMaria.id(), canceladaDeMaria.id());
         }
 
         @Test
         @DisplayName("Scenario: Listagem filtrada — por medico")
         void listagemFiltradaPorMedico() {
-            var resultado = listar.executar(new ListarConsultasQuery(
+            var resultado = listar.executar(ListarConsultasQuery.filtrando(
                     null, joao.id(), null, null, null));
 
-            assertThat(resultado).extracting(ConsultaResumo::id)
+            assertThat(resultado.conteudo()).extracting(ConsultaResumo::id)
                     .containsExactly(futuraDeMaria.id());
         }
 
         @Test
         @DisplayName("Scenario: Listagem filtrada — por status")
         void listagemFiltradaPorStatus() {
-            var resultado = listar.executar(new ListarConsultasQuery(
+            var resultado = listar.executar(ListarConsultasQuery.filtrando(
                     null, null, Set.of(StatusConsulta.CANCELADA, StatusConsulta.REALIZADA),
                     null, null));
 
-            assertThat(resultado).extracting(ConsultaResumo::id)
+            assertThat(resultado.conteudo()).extracting(ConsultaResumo::id)
                     .containsExactlyInAnyOrder(canceladaDeMaria.id(), passadaDeJose.id());
         }
 
         @Test
         @DisplayName("Scenario: Listagem filtrada — por intervalo de datas")
         void listagemFiltradaPorIntervalo() {
-            var resultado = listar.executar(new ListarConsultasQuery(
+            var resultado = listar.executar(ListarConsultasQuery.filtrando(
                     null, null, null, daquiA(1), daquiA(48)));
 
-            assertThat(resultado).extracting(ConsultaResumo::id)
+            assertThat(resultado.conteudo()).extracting(ConsultaResumo::id)
                     .containsExactly(futuraDeMaria.id());
         }
 
         @Test
         @DisplayName("Scenario: Listagem filtrada — criterios combinados com E")
         void listagemComCriteriosCombinados() {
-            var resultado = listar.executar(new ListarConsultasQuery(
+            var resultado = listar.executar(ListarConsultasQuery.filtrando(
                     maria.id(), joao.id(), Set.of(StatusConsulta.AGENDADA), null, null));
 
-            assertThat(resultado).extracting(ConsultaResumo::id)
+            assertThat(resultado.conteudo()).extracting(ConsultaResumo::id)
                     .containsExactly(futuraDeMaria.id());
         }
 
         @Test
         @DisplayName("Scenario: Listagem sem resultados devolve lista vazia, sem erro")
         void listagemSemResultados() {
-            var resultado = listar.executar(new ListarConsultasQuery(
+            var resultado = listar.executar(ListarConsultasQuery.filtrando(
                     UUID.randomUUID(), null, null, null, null));
 
-            assertThat(resultado).isEmpty();
+            assertThat(resultado.conteudo()).isEmpty();
+            assertThat(resultado.total()).isZero();
         }
     }
 }

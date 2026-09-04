@@ -15,7 +15,14 @@ import br.com.fiap.hospital.agendamento.domain.port.ConsultaRepositoryPort;
 import br.com.fiap.hospital.agendamento.domain.port.EventPublisherPort;
 import br.com.fiap.hospital.agendamento.domain.port.UsuarioRepositoryPort;
 import br.com.fiap.hospital.agendamento.fake.ConsultaRepositoryFake;
+import br.com.fiap.hospital.agendamento.infrastructure.transacao.AgendarConsultaUseCaseTransacional;
+import br.com.fiap.hospital.agendamento.infrastructure.transacao.AtualizarConsultaUseCaseTransacional;
+import br.com.fiap.hospital.agendamento.infrastructure.transacao.BuscarConsultaPorIdUseCaseTransacional;
+import br.com.fiap.hospital.agendamento.infrastructure.transacao.CancelarConsultaUseCaseTransacional;
+import br.com.fiap.hospital.agendamento.infrastructure.transacao.ConfirmarConsultaUseCaseTransacional;
+import br.com.fiap.hospital.agendamento.infrastructure.transacao.ListarConsultasUseCaseTransacional;
 import java.time.Clock;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -25,15 +32,14 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 /**
  * Fiacao dos casos de uso, sem banco e sem container.
  *
- * <p>Existe para preencher parte da lacuna deixada pela remocao do {@code contextLoads}
- * do M00: como o contexto deste servico agora depende de datasource, JPA e Flyway, a
- * verificacao do contexto completo passou a viver nos testes {@code *IT}, que so rodam
- * no {@code mvn verify}.
+ * <p>Cobre a lacuna do {@code contextLoads} removido no M02 para a parte mais provavel
+ * de quebrar — construtor de caso de uso alterado ou bean removido —, e a pega ainda no
+ * {@code mvn test}. Quebra em datasource, JPA ou Flyway continua aparecendo so no
+ * {@code mvn verify}.
  *
- * <p>Este teste nao substitui aqueles. Ele cobre a quebra mais provavel e mais barata
- * de detectar — alguem alterar um construtor de caso de uso ou remover um bean de
- * {@link CasosDeUsoConfig} — e a pega ainda no {@code mvn test}. Quebra em datasource,
- * JPA ou Flyway continua aparecendo so no {@code verify}.
+ * <p>Verifica tambem a garantia do M03: os casos de uso NUS nao sao beans. Se voltarem a
+ * ser, um controller pode injeta-los por engano e a operacao roda sem transacao, o que
+ * quebraria o outbox do M05 em silencio.
  */
 @DisplayName("CasosDeUsoConfig")
 class CasosDeUsoConfigTest {
@@ -44,16 +50,38 @@ class CasosDeUsoConfigTest {
             .withBean(UsuarioRepositoryPort.class, UsuarioRepositoryVazio::new);
 
     @Test
-    @DisplayName("todos os seis casos de uso sao resolvidos")
-    void todosOsCasosDeUsoSaoResolvidos() {
+    @DisplayName("os seis decoradores transacionais sao resolvidos")
+    void osSeisDecoradoresSaoResolvidos() {
         contexto.run(ctx -> assertThat(ctx)
                 .hasNotFailed()
-                .hasSingleBean(AgendarConsultaUseCase.class)
-                .hasSingleBean(AtualizarConsultaUseCase.class)
-                .hasSingleBean(ConfirmarConsultaUseCase.class)
-                .hasSingleBean(CancelarConsultaUseCase.class)
-                .hasSingleBean(BuscarConsultaPorIdUseCase.class)
-                .hasSingleBean(ListarConsultasUseCase.class));
+                .hasSingleBean(AgendarConsultaUseCaseTransacional.class)
+                .hasSingleBean(AtualizarConsultaUseCaseTransacional.class)
+                .hasSingleBean(ConfirmarConsultaUseCaseTransacional.class)
+                .hasSingleBean(CancelarConsultaUseCaseTransacional.class)
+                .hasSingleBean(BuscarConsultaPorIdUseCaseTransacional.class)
+                .hasSingleBean(ListarConsultasUseCaseTransacional.class));
+    }
+
+    @Test
+    @DisplayName("nenhum caso de uso nu esta registrado como bean")
+    void nenhumCasoDeUsoNuERegistrado() {
+        List<Class<?>> nus = List.of(
+                AgendarConsultaUseCase.class,
+                AtualizarConsultaUseCase.class,
+                ConfirmarConsultaUseCase.class,
+                CancelarConsultaUseCase.class,
+                BuscarConsultaPorIdUseCase.class,
+                ListarConsultasUseCase.class);
+
+        contexto.run(ctx -> {
+            for (Class<?> nu : nus) {
+                assertThat(ctx)
+                        .as("%s nao pode ser injetavel: sem o decorador, a operacao roda "
+                                + "fora de transacao e o outbox do M05 quebra em silencio",
+                                nu.getSimpleName())
+                        .doesNotHaveBean(nu);
+            }
+        });
     }
 
     @Test

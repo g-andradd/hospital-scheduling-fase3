@@ -164,6 +164,34 @@ Se o Testcontainers não encontrar o Docker mesmo com o daemon rodando, verifiqu
 endpoint que a sua instalação não expõe — remover essa linha faz o Testcontainers
 autodescobrir de novo.
 
+## Usar a API
+
+Com o serviço no ar, a documentação interativa fica em **http://localhost:8081/swagger-ui.html**,
+e a especificação em `/v3/api-docs`.
+
+| Endpoint | Método | O que faz |
+|---|---|---|
+| `/api/v1/consultas` | POST | Registra uma consulta. Responde `201` com `Location` |
+| `/api/v1/consultas/{id}` | PUT | Altera. **Campo ausente preserva o valor atual** |
+| `/api/v1/consultas/{id}/confirmar` | PATCH | Leva a consulta a `CONFIRMADA` |
+| `/api/v1/consultas/{id}/cancelar` | PATCH | Cancela, com motivo obrigatório |
+| `/api/v1/consultas/{id}` | GET | Recupera pelo identificador |
+| `/api/v1/consultas` | GET | Lista paginado, com filtros opcionais |
+
+A listagem aceita `pacienteId`, `medicoId`, `status`, `de`, `ate`, `pagina` e `tamanho`.
+O tamanho de página tem **teto de 100**: um pedido maior é aparado, não recusado, e o
+campo `tamanho` da resposta informa o valor aplicado.
+
+Erros seguem RFC 7807, com `correlationId` e `timestamp`. Enviar `X-Correlation-Id` na
+requisição preserva o seu identificador na resposta e no log.
+
+> ### ⚠️ Os endpoints estão abertos
+>
+> Não há autenticação nem autorização nesta versão. A matriz de perfis de
+> [docs/02-especificacao-funcional.md](docs/02-especificacao-funcional.md) §3 é aplicada
+> na entrega seguinte, junto com o `POST /auth/login`. Não exponha este serviço fora da
+> máquina até lá.
+
 ## Executar a aplicação completa
 
 > Preenchido no M12.

@@ -25,5 +25,20 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: false
 
+  data:
+    web:
+      pageable:
+        # Teto de tamanho de pagina. Sem ele, um unico size=100000 materializa cem mil
+        # linhas como entidades, dominio e DTOs, e derruba o servico por um parametro de
+        # query. Pedido acima do teto e aparado, nao recusado.
+        max-page-size: 100
+        default-page-size: 20
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
 server:
   port: 8081

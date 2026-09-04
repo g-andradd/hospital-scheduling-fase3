@@ -2,6 +2,7 @@ package br.com.fiap.hospital.agendamento.fake;
 
 import br.com.fiap.hospital.agendamento.domain.Consulta;
 import br.com.fiap.hospital.agendamento.domain.FiltroDeConsultas;
+import br.com.fiap.hospital.agendamento.domain.Pagina;
 import br.com.fiap.hospital.agendamento.domain.PeriodoConsulta;
 import br.com.fiap.hospital.agendamento.domain.port.ConsultaRepositoryPort;
 import java.util.ArrayList;
@@ -74,11 +75,18 @@ public class ConsultaRepositoryFake implements ConsultaRepositoryPort {
     }
 
     @Override
-    public List<Consulta> listar(FiltroDeConsultas filtro) {
-        return armazenadas.values().stream()
+    public Pagina<Consulta> listar(FiltroDeConsultas filtro) {
+        List<Consulta> aceitas = armazenadas.values().stream()
                 .filter(filtro::aceita)
                 .map(ConsultaRepositoryFake::copiar)
                 .toList();
+
+        int primeiro = filtro.pagina() * filtro.tamanho();
+        List<Consulta> daPagina = primeiro >= aceitas.size()
+                ? List.of()
+                : aceitas.subList(primeiro, Math.min(primeiro + filtro.tamanho(), aceitas.size()));
+
+        return new Pagina<>(daPagina, filtro.pagina(), filtro.tamanho(), aceitas.size());
     }
 
     private List<Consulta> ativasQueSobrepoem(PeriodoConsulta periodo) {

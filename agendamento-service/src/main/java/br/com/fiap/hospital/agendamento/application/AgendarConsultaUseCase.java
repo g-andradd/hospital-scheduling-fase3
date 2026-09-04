@@ -6,6 +6,7 @@ import br.com.fiap.hospital.agendamento.domain.PeriodoConsulta;
 import br.com.fiap.hospital.agendamento.domain.TipoEventoConsulta;
 import br.com.fiap.hospital.agendamento.domain.exception.MedicoNaoEncontradoException;
 import br.com.fiap.hospital.agendamento.domain.exception.PacienteNaoEncontradoException;
+import br.com.fiap.hospital.agendamento.domain.exception.UsuarioNaoEncontradoException;
 import br.com.fiap.hospital.agendamento.domain.port.ConsultaRepositoryPort;
 import br.com.fiap.hospital.agendamento.domain.port.EventPublisherPort;
 import br.com.fiap.hospital.agendamento.domain.port.UsuarioRepositoryPort;
@@ -41,6 +42,10 @@ public class AgendarConsultaUseCase {
                 .orElseThrow(() -> new PacienteNaoEncontradoException(comando.pacienteId()));
         usuarios.buscarMedicoPorId(comando.medicoId())
                 .orElseThrow(() -> new MedicoNaoEncontradoException(comando.medicoId()));
+        // O registrador tambem e chave estrangeira. Sem esta checagem, um id valido mas
+        // inexistente so falha no flush, como violacao de constraint, e vira 500.
+        usuarios.buscarUsuarioPorId(comando.registradoPorId())
+                .orElseThrow(() -> new UsuarioNaoEncontradoException(comando.registradoPorId()));
 
         int duracao = comando.duracaoMinutos() == null
                 ? Consulta.DURACAO_PADRAO_MINUTOS

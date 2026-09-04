@@ -223,9 +223,15 @@ Cadeia de filtros: `SecurityFilterChain` stateless, CSRF desabilitado (API), `/a
 }
 ```
 
-Mapa de exceções: `AgendamentoNoPassado` → 422, `ConflitoDeAgenda` → 409, `RecursoNaoEncontrado` → 404, `TransicaoDeStatusInvalida` → 409, `MotivoDeCancelamentoObrigatorio` → 422, `AlteracaoConcorrente` → 409, `IllegalArgumentException` → 400, `MethodArgumentNotValid` → 400, `AccessDenied` → 403, `Authentication` → 401.
+Mapa de exceções: `AgendamentoNoPassado` → 422, `AgendamentoForaDoHorizonte` → 422, `DateTimeException` → 400, `ConflitoDeAgenda` → 409, `RecursoNaoEncontrado` → 404, `TransicaoDeStatusInvalida` → 409, `MotivoDeCancelamentoObrigatorio` → 422, `AlteracaoConcorrente` → 409, `IllegalArgumentException` → 400, `MethodArgumentNotValid` → 400, `AccessDenied` → 403, `Authentication` → 401.
 
 `RecursoNaoEncontrado` é a **base** de `ConsultaNaoEncontrada`, `PacienteNaoEncontrado` e `MedicoNaoEncontrado`. Mapear a base cobre os três com uma entrada só, e um recurso novo em change futura não exige mexer neste mapa — só herdar. O `detail` do `ProblemDetail` vem da mensagem da exceção concreta, então o cliente continua sabendo qual recurso faltou.
+
+Os dois **409** têm `type` distinto, e a distinção não é cosmética. `conflito-de-agenda` é definitivo: repetir a requisição dá o mesmo resultado, e o cliente precisa escolher outro horário. `alteracao-concorrente` é transitório: recarregar o recurso e repetir a operação normalmente funciona. O status HTTP não carrega essa diferença — o `type` da RFC 7807 é o identificador estável da categoria, e é onde o cliente programa sua reação. Colapsar os dois obrigaria o cliente a interpretar o `detail`, que é prosa em português destinada a humanos.
+
+`AgendamentoForaDoHorizonte` é 422 pela mesma razão que `AgendamentoNoPassado`: a requisição está bem formada e é recusada por regra de negócio. O horizonte de agendamento é de **24 meses** — decisão de produto, não limite técnico: agenda hospitalar não se planeja com mais de dois anos, e um pedido além disso é quase sempre erro de digitação no ano. O limite também fecha uma classe de falha, porque uma data no ano 999999999 atravessava o domínio e só estourava na aritmética.
+
+`DateTimeException` → 400 é rede de segurança para qualquer outro caminho que estoure cálculo de data. O `detail` é estável, porque a mensagem do JDK cita tipo e campo internos.
 
 `IllegalArgumentException` entra no mapa **explicitamente**. Ela é lançada pelos value objects do domínio (`Cpf`, `Email`, `Crm`) quando o formato não confere, e sem essa linha cairia no handler genérico de 500 — um erro de entrada respondido como falha de servidor. A Bean Validation normalmente a intercepta antes, no DTO, mas o domínio é chamável por outros caminhos e não pode depender disso.
 

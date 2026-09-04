@@ -33,6 +33,8 @@
         -->
         <testcontainers.version>1.21.4</testcontainers.version>
 
+        <springdoc.version>2.8.6</springdoc.version>
+
         <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
         <maven-dependency-plugin.version>3.6.1</maven-dependency-plugin.version>
         <maven-surefire-plugin.version>3.2.5</maven-surefire-plugin.version>

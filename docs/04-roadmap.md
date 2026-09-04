@@ -176,6 +176,13 @@ acessa os próprios recursos.
 - Jackson com `JavaTimeModule` e ISO-8601, sem timestamps numéricos.
 - `CONSULTA_ATUALIZADA` preenche `alteracoes` com os valores anteriores.
 
+**Duas correções que o M05 carrega, achadas na revisão do M03**
+
+Nenhuma das duas justifica change própria: o M05 já cria migration neste banco e já mexe nesta capability, e um ciclo completo de proposta para cada uma custaria mais do que vale.
+
+- **Double-booking sob concorrência.** As queries de conflito do M02 são *time-of-check/time-of-use*: duas transações simultâneas passam pela verificação antes de qualquer commit e ambas inserem. O design do M02 descartou `tstzrange` + GiST por legibilidade, mas essa era a única alternativa **correta sob concorrência** — a comparação foi feita na dimensão errada, e legibilidade não compensa permitir agenda dupla. Entra como `MODIFIED Requirement` em "Detecção de conflito resolvida pelo armazenamento", com migration `V3` criando `EXCLUDE USING gist` — exige a extensão `btree_gist` para a igualdade de `uuid` — e um teste de integração provando que duas inserções concorrentes sobrepostas **não** passam as duas.
+- **A spec mente sobre offset.** O Requirement "Durabilidade das consultas" diz que a consulta recuperada apresenta "o instante com seu deslocamento de fuso". `timestamptz` preserva o instante e **descarta** o deslocamento; isso foi apontado no relatório do M02 e não chegou ao texto. Entra como `MODIFIED Requirement` corrigindo a redação para falar em instante, não em deslocamento.
+
 **Critérios de aceite**
 - `@DataJpaTest` provando atomicidade: exceção após salvar a consulta deixa o outbox vazio
 - Teste com Testcontainers RabbitMQ validando envelope e headers no exchange real
@@ -333,7 +340,7 @@ tabela de autorização vira um Scenario e um teste.
 
 **Notas técnicas obrigatórias**
 - Regras ArchUnit: `domain` não depende de `application` nem `infrastructure`; `domain` sem Spring/JPA/Jackson/Validation; classes `*UseCase` com exatamente um método público; entidades JPA só em `infrastructure.persistence`; controllers não injetam repositório, só caso de uso; nada de `System.out`.
-- `correlationId`: filtro HTTP gera ou lê `X-Correlation-Id` → MDC → header AMQP no relay → MDC no consumidor. O mesmo id tem que aparecer nos três logs para um único fluxo.
+- `correlationId`: **o filtro HTTP foi antecipado para o M03**, porque o `ProblemDetail` do §8 já exige o campo. Aqui resta a propagação: header AMQP no relay do outbox → MDC no consumidor, nos dois serviços. O filtro em si só precisa ser replicado no notificacao e no historico. O mesmo id tem que aparecer nos três logs para um único fluxo.
 - Actuator expõe `health`, `info`, `metrics`, `prometheus`. **Nunca** `env` ou `beans`.
 
 ---
