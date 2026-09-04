@@ -1,6 +1,6 @@
 # Tasks — M05
 
-Implementação concluída e verificada no working tree. A validação em clone limpo permanece pendente até o commit e push exclusivos do Gabriel. A matriz identifica métodos reais e cada cenário pelo nome exato no teste/DisplayName ou nos casos parametrizados.
+Implementação concluída e verificada no working tree e em clone limpo. A matriz identifica métodos reais e cada cenário pelo nome exato no teste/DisplayName ou nos casos parametrizados.
 
 ## 1. Build e configuração
 
@@ -121,4 +121,4 @@ Mensageria corresponde a mensageria-de-eventos; Agendamento a agendamento-de-con
 - [x] 9.3 Conferir os relatórios `target/site/jacoco/index.html` dos módulos tocados: mínimo 80% por módulo e 90% em domain/application do agendamento; registrar números reais sem antecipar o gate global do M10.
 - [x] 9.4 Executar `rg -n '^import (org\.springframework|jakarta\.(persistence|validation)|com\.fasterxml|org\.springframework\.amqp)' agendamento-service/src/main/java/br/com/fiap/hospital/agendamento/domain agendamento-service/src/main/java/br/com/fiap/hospital/agendamento/application` e exigir nenhuma ocorrência; verificar os decoradores transacionais e exigir as três coberturas estruturais existentes mais a cobertura AMQP verdes. A suíte ArchUnit continua reservada ao M11 por `docs/04-roadmap.md`.
 - [x] 9.5 Demonstrar que as verificações detectam o defeito: retirar temporariamente a exclusão no banco isolado deve quebrar o IT concorrente; retirar um campo do catálogo hostil deve quebrar a cobertura; fazer o recoverer engolir erro deve quebrar a prova de DLQ. Restaurar as alterações experimentais e repetir apenas as suítes afetadas.
-- [ ] 9.6 Entregar ao Gabriel instruções de clone limpo da feature e executar `mvn -q clean verify` no clone que ele preparar; registrar a saída antes da aprovação do PR, pois o M05 altera build/infra. Todas as operações Git e o commit/push do archive antes do merge continuam exclusivos dele.
+- [x] 9.6 Entregar ao Gabriel instruções de clone limpo da feature e executar `mvn -q clean verify` no clone que ele preparar; registrar a saída antes da aprovação do PR, pois o M05 altera build/infra. Todas as operações Git e o commit/push do archive antes do merge continuam exclusivos dele.
