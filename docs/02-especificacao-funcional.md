@@ -108,12 +108,16 @@ paciente          (id, usuario_id FK UK, cpf UK, data_nascimento, telefone)
 medico            (id, usuario_id FK UK, crm UK, especialidade)
 consulta          (id, paciente_id FK, medico_id FK, registrado_por_id FK,
                    data_hora, duracao_minutos, status, observacoes,
-                   motivo_cancelamento, criado_em, atualizado_em, versao)
+                   motivo_cancelamento, criado_em, atualizado_em, versao, periodo_ocupado tstzrange)
 outbox_evento     (id, agregado_id, tipo_evento, payload jsonb, routing_key,
                    criado_em, publicado_em, tentativas)
 ```
 
 Índices: `consulta(medico_id, data_hora)`, `consulta(paciente_id, data_hora)`, `outbox_evento(publicado_em) WHERE publicado_em IS NULL`.
+
+No M05, periodo_ocupado é NOT NULL e derivado por trigger BEFORE INSERT OR UPDATE em UTC, inclusive para SQL direto. As constraints ex_consulta_medico_periodo e ex_consulta_paciente_periodo usam EXCLUDE USING gist, igualdade UUID via btree_gist e sobreposição de range apenas em AGENDADA/CONFIRMADA. São NOT DEFERRABLE; [início,fim) permite adjacência. V3 faz diagnóstico prévio e backfill, recusando dados ativos inconsistentes sem reparação silenciosa.
+
+Os timestamps preservam instantes, não o deslocamento original. payload do outbox contém o envelope completo, id=eventId, agregado_id=aggregateId e criado_em=occurredAt. tentativas é numeric inteiro não negativo, sem teto de 32 bits; publicado_em fica nulo até confirmação do relay. A ordenação do lote por tentativas/criado_em/id não é resolvida pelo índice parcial de publicado_em.
 
 ### notificacao_db
 

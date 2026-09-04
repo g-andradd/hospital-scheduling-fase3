@@ -114,4 +114,28 @@ class ConsultaRepositoryAdapterIT extends ConsultaRepositoryContractTest {
     protected UUID registradoPorId() {
         return registrante;
     }
+
+    @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
+    @Autowired org.springframework.transaction.support.TransactionTemplate transacao;
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("Leitura com outro deslocamento preserva o instante")
+    
+    // Scenario: Leitura com outro deslocamento preserva o instante
+    void fusoDeSessaoNaoAlteraInstante() {
+        var data=OffsetDateTime.parse("2018-01-15T14:00:00+05:00");
+        var id=UUID.randomUUID();
+        transacao.executeWithoutResult(s-> {
+            var c=br.com.fiap.hospital.agendamento.domain.Consulta.reconstituir(id,paciente,medico,registrante,
+                new br.com.fiap.hospital.agendamento.domain.PeriodoConsulta(data,30),
+                br.com.fiap.hospital.agendamento.domain.StatusConsulta.REALIZADA,null,null,data,data);
+            adaptador.salvar(c);
+        });
+        transacao.executeWithoutResult(s->{
+            jdbc.execute("SET LOCAL TIME ZONE 'Asia/Tokyo'");
+            assert org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive();
+            org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject("SELECT data_hora::text FROM consulta WHERE id=?",String.class,id)).endsWith("+09");
+            org.assertj.core.api.Assertions.assertThat(adaptador.buscarPorId(id).orElseThrow().periodo().inicio().toInstant()).isEqualTo(data.toInstant());
+        });
+    }
 }

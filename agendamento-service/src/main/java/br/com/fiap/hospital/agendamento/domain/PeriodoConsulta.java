@@ -10,10 +10,9 @@ import java.util.Objects;
  * nao. E o que faz uma consulta que comeca exatamente quando outra termina <b>nao</b>
  * ser conflito — a borda que o M02 vai ter de reproduzir na query SQL de sobreposicao.
  *
- * <p>Usa {@link OffsetDateTime} porque o offset e dado de negocio numa agenda
- * hospitalar: o banco guarda {@code timestamptz} e o contrato de eventos transmite o
- * offset explicito. {@code LocalDateTime} o perderia; {@code Instant} o normalizaria
- * para UTC.
+ * <p>Usa {@link OffsetDateTime} para representar o instante sem ambiguidade.
+ * O banco preserva o instante, mas nao o offset original. O adaptador de eventos
+ * representa esse instante na zona America/Sao_Paulo antes de gravar o envelope.
  */
 public record PeriodoConsulta(OffsetDateTime inicio, int duracaoMinutos) {
 

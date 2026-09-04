@@ -281,3 +281,19 @@ Estas convenções são injetadas em toda requisição de planejamento pelo `con
 ### Cortes conscientes
 
 Não usamos: MapStruct, Lombok, `@MockBean` para infraestrutura, banco em memória (H2). Cada uma dessas escolhas troca velocidade de escrita por perda de fidelidade ou de legibilidade — trocas ruins num projeto que vai ser lido e avaliado.
+
+## 9. Publicação transacional e concorrência (M05)
+
+Os decoradores de infrastructure/transacao continuam delimitando a transação REQUIRED dos quatro casos de escrita. OutboxEventPublisher exige MANDATORY; JdbcTemplate participa da mesma conexão transacional gerenciada pelo JpaTransactionManager. O fato inclui snapshots imutáveis antes/depois da alteração. Serialização ou gravação recusada desfaz a consulta junto com o evento.
+
+O relay é um bean transacional separado do scheduler. Seleciona até 50 pendentes por tentativas/criado_em/id com FOR UPDATE SKIP LOCKED, mantém locks durante a publicação e só marca sucesso com ACK sem return. Contador numeric não tem limite artificial; falhas permanecem pendentes, priorizadas depois de eventos novos. At-least-once é parte do contrato: queda entre ACK e commit local reenvia o mesmo eventId/envelope. M06/M08 devem deduplicar.
+
+O filtro HTTP conserva o correlationId no atributo/resposta e no MDC durante a cadeia. O publisher o grava no envelope; o relay recupera esse valor minutos depois e restaura o MDC anterior ao terminar cada evento. dataHora deriva do instante em America/Sao_Paulo na data da consulta, inclusive regras históricas; occurredAt é UTC e não muda com a publicação tardia.
+
+V3 acrescenta periodo_ocupado, derivado por trigger em UTC, e exclusões GiST independentes para médico e paciente ativos. O intervalo é semiaberto. As pré-queries antecipam mensagens de conflito; a constraint garante corretude inclusive para outro escritor SQL. A expressão timestamptz + interval não é indexada nem declarada falsamente IMMUTABLE.
+
+Em saveAndFlush, somente 23P01 das duas constraints nomeadas vira ConflitoDeAgendaException. Nome vem do diagnóstico estruturado do driver, pois o Hibernate pode omiti-lo. 40P01 e 40001 viram AlteracaoConcorrenteException, assim como lock otimista, sem afirmar que o horário está ocupado. Os dois tipos continuam 409 distintos. Nenhuma query é feita após o erro e nenhuma exceção é engolida para tentar commit.
+
+Não há retry automático: decisão consciente para o ambiente demonstrativo, onde o IT força a corrida. Múltiplas instâncias ou tráfego concorrente real exigem reavaliar retentativa limitada da transação inteira.
+
+A configuração compartilhada de RabbitMQ aplica a topologia literal do contrato, validação estrita de envelope/headers e retry incluindo conversão. default-requeue-rejected=false é obrigatório. DLQs não têm consumidor/reenvio automático. Procedimentos e diagnóstico estão no [README](../README.md#operação-dos-eventos-de-consulta-m05); decisões em [ADR-001](adr/ADR-001-rabbitmq.md) e [ADR-006](adr/ADR-006-transactional-outbox.md).

@@ -58,6 +58,7 @@ import org.springframework.test.context.DynamicPropertySource;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@org.springframework.context.annotation.Import(EntradasHostisIT.CorridaConfig.class)
 @DisplayName("Entradas hostis")
 class EntradasHostisIT {
 
@@ -518,5 +519,51 @@ class EntradasHostisIT {
 
     private static javax.crypto.SecretKey chave(String segredo) {
         return Keys.hmacShaKeyFor(segredo.getBytes(StandardCharsets.UTF_8));
+    }
+
+    @org.springframework.boot.test.context.TestConfiguration
+    static class CorridaConfig {
+        @org.springframework.context.annotation.Bean
+        @org.springframework.context.annotation.Primary
+        M05JpaBase.ConsultaComBarreira consultaComBarreira(
+                br.com.fiap.hospital.agendamento.infrastructure.persistence.ConsultaRepositoryAdapter real) {
+            return new M05JpaBase.ConsultaComBarreira(real);
+        }
+    }
+    @Autowired M05JpaBase.ConsultaComBarreira barreiraM05;
+    @Autowired org.springframework.jdbc.core.JdbcTemplate jdbcM05;
+
+    @Test @DisplayName("Conflito concorrente pela API retorna Problem Detail")
+    
+    // Scenario: Conflito concorrente pela API retorna Problem Detail
+    void corridaHttpProduzUmaConsultaUmEventoE409Sem5xx() throws Exception {
+        var data=java.time.OffsetDateTime.now(java.time.Clock.systemUTC()).plusDays(10).withNano(0);
+        String corpo="""
+                {"pacienteId":"%s","medicoId":"%s","registradoPorId":"%s","dataHora":"%s","duracaoMinutos":30}
+                """.formatted(pacienteId,medicoId,registranteId,data);
+        long consultasAntes=consultaJpa.count();
+        long eventosAntes=jdbcM05.queryForObject("SELECT count(*) FROM outbox_evento",Long.class);
+        barreiraM05.armar();
+        try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var f1=pool.submit(()->postCorrida(corpo,"corrida-a"));
+            var f2=pool.submit(()->postCorrida(corpo,"corrida-b"));
+            var respostas=List.of(f1.get(20,java.util.concurrent.TimeUnit.SECONDS),f2.get(20,java.util.concurrent.TimeUnit.SECONDS));
+            assertThat(respostas).extracting(r->r.getStatusCode().value()).containsExactlyInAnyOrder(201,409);
+            respostas.forEach(r->assertThat(r.getStatusCode().is5xxServerError()).isFalse());
+            var erro=respostas.stream().filter(r->r.getStatusCode().value()==409).findFirst().orElseThrow();
+            var tree=new com.fasterxml.jackson.databind.ObjectMapper().readTree(erro.getBody());
+            assertThat(tree.path("type").asText()).isIn(
+                "https://hospital.fiap.br/erros/conflito-de-agenda",
+                "https://hospital.fiap.br/erros/alteracao-concorrente");
+            assertThat(tree.path("correlationId").asText()).isIn("corrida-a","corrida-b");
+            assertThat(tree.path("timestamp").asText()).isNotBlank();
+            assertThat(erro.getBody()).doesNotContain("SQL","constraint","Exception","org.hibernate","stack");
+            assertThat(consultaJpa.count()).isEqualTo(consultasAntes+1);
+            assertThat(jdbcM05.queryForObject("SELECT count(*) FROM outbox_evento",Long.class)).isEqualTo(eventosAntes+1);
+        } finally {barreiraM05.desarmar();}
+    }
+    private ResponseEntity<String> postCorrida(String corpo,String correlacao) {
+        var headers=autenticado(); headers.set("X-Correlation-Id",correlacao);
+        return rest.exchange("/api/v1/consultas",HttpMethod.POST,new HttpEntity<>(corpo,headers),String.class);
     }
 }
