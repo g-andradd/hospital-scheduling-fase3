@@ -1,0 +1,52 @@
+spring:
+  application:
+    name: agendamento-service
+
+  datasource:
+    url: ${AGENDAMENTO_DB_URL:jdbc:postgresql://localhost:5432/agendamento_db}
+    username: ${POSTGRES_USER:hospital}
+    password: ${POSTGRES_PASSWORD:hospital}
+
+  jpa:
+    # O Flyway cria o schema; o Hibernate apenas confere. `validate` recusa subir
+    # quando o mapeamento diverge do banco, em vez de descobrir a divergencia na
+    # primeira query. `update` e proibido pelo projeto: torna o schema imprevisivel
+    # e nao versionado.
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: America/Sao_Paulo
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+  data:
+    web:
+      pageable:
+        # Teto de tamanho de pagina. Sem ele, um unico size=100000 materializa cem mil
+        # linhas como entidades, dominio e DTOs, e derruba o servico por um parametro de
+        # query. Pedido acima do teto e aparado, nao recusado.
+        max-page-size: 100
+        default-page-size: 20
+
+hospital:
+  jwt:
+    # HS256 exige ao menos 32 bytes. O valor vem do ambiente; o padrao serve apenas
+    # para desenvolvimento local e nao deve ser usado em nenhum outro lugar.
+    secret: ${JWT_SECRET:troque-este-segredo-por-um-valor-aleatorio-de-no-minimo-32-bytes}
+    expiracao: PT8H
+    emissor: hospital-agendamento
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+server:
+  port: 8081

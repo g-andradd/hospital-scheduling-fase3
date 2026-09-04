@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>br.com.fiap.hospital</groupId>
+    <artifactId>hospital-scheduling-fase3</artifactId>
+    <version>${revision}</version>
+    <packaging>pom</packaging>
+
+    <name>hospital-scheduling-fase3</name>
+    <description>Sistema de agendamento e historico de consultas hospitalares — Tech Challenge Fase 3</description>
+
+    <properties>
+        <!-- Versao unica do projeto. Subir aqui sobe todos os modulos. -->
+        <revision>0.1.0</revision>
+
+        <java.version>21</java.version>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+        <spring-boot.version>3.5.7</spring-boot.version>
+
+        <!--
+            Sobrepoe a versao gerenciada pelo Spring Boot. O Docker Engine 29 recusa
+            versoes de API abaixo de 1.44, e o docker-java empacotado no Testcontainers
+            1.21.3 negocia uma anterior: toda chamada a /info volta HTTP 400 e nenhum
+            container sobe. Variavel de ambiente nao contorna, porque a estrategia de
+            conexao monta a propria configuracao.
+        -->
+        <testcontainers.version>1.21.4</testcontainers.version>
+
+        <springdoc.version>2.8.6</springdoc.version>
+        <jjwt.version>0.12.6</jjwt.version>
+
+        <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
+        <maven-dependency-plugin.version>3.6.1</maven-dependency-plugin.version>
+        <maven-surefire-plugin.version>3.2.5</maven-surefire-plugin.version>
+        <maven-failsafe-plugin.version>3.2.5</maven-failsafe-plugin.version>
+        <jacoco-maven-plugin.version>0.8.12</jacoco-maven-plugin.version>
+        <flatten-maven-plugin.version>1.6.0</flatten-maven-plugin.version>
+    </properties>
+
+    <modules>
+        <module>shared-contracts</module>
+        <module>shared-security</module>
+        <module>agendamento-service</module>
+        <module>notificacao-service</module>
+        <module>historico-service</module>
+    </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <!--
+                Importado ANTES do spring-boot-dependencies: com BOM importado, e nao
+                herdado, sobrepor a property nao muda a versao resolvida — quem declara
+                primeiro vence.
+            -->
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-api</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-impl</artifactId>
+                <version>${jjwt.version}</version>
+                <scope>runtime</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt-jackson</artifactId>
+                <version>${jjwt.version}</version>
+                <scope>runtime</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                    <version>${spring-boot.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>${maven-compiler-plugin.version}</version>
+                <configuration>
+                    <release>${maven.compiler.release}</release>
+                    <compilerArgs>
+                        <arg>-parameters</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
+
+            <!--
+                Expoe o caminho do jar de cada dependencia como propriedade
+                (ex.: ${org.mockito:mockito-core:jar}), usada abaixo para declarar
+                o Mockito como java agent no surefire.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>${maven-dependency-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>propriedades-de-dependencia</id>
+                        <phase>initialize</phase>
+                        <goals>
+                            <goal>properties</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Testes unitarios: rapidos, sem container. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${maven-surefire-plugin.version}</version>
+                <configuration>
+                    <includes>
+                        <include>**/*Test.java</include>
+                    </includes>
+                    <!--
+                        O Mockito entra como java agent declarado, em vez de se auto-anexar
+                        em tempo de execucao — o JDK vai proibir o auto-attach.
+
+                        @{argLine} COMPOE com o valor que o jacoco:prepare-agent escreveu na
+                        propriedade argLine; ele nao pode ser omitido. Escrever apenas
+                        -javaagent:... aqui substituiria esse valor, o agente do JaCoCo sumiria,
+                        e a cobertura passaria a ser reportada como zero — sem erro e com o
+                        build verde. A sintaxe @{...} e resolvida na execucao do surefire,
+                        depois que o JaCoCo ja definiu a propriedade.
+                    -->
+                    <argLine>@{argLine} -javaagent:${org.mockito:mockito-core:jar}</argLine>
+                </configuration>
+            </plugin>
+
+            <!-- Testes de integracao: Testcontainers, so na fase verify. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>${maven-failsafe-plugin.version}</version>
+                <configuration>
+                    <includes>
+                        <include>**/*IT.java</include>
+                    </includes>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>integration-tests</id>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Cobertura: instrumenta e reporta. Gate de cobertura entra no M10. -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco-maven-plugin.version}</version>
+                <configuration>
+                    <excludes>
+                        <!--
+                            As classes *Application contem apenas a anotacao @SpringBootApplication
+                            e o main() que delega para SpringApplication.run. Nao ha comportamento
+                            proprio a verificar: um teste que as cobrisse existiria so para mover o
+                            percentual, que e exatamente o que o M10 proibe. O contextLoads de cada
+                            servico ja prova o que importa — que o contexto sobe.
+                        -->
+                        <exclude>**/*Application.class</exclude>
+                    </excludes>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Sem isto o POM publicado carrega o literal ${revision} e quebra consumidores. -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>flatten-maven-plugin</artifactId>
+                <version>${flatten-maven-plugin.version}</version>
+                <configuration>
+                    <updatePomFile>true</updatePomFile>
+                    <flattenMode>resolveCiFriendliesOnly</flattenMode>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>flatten</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>flatten</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>flatten-clean</id>
+                        <phase>clean</phase>
+                        <goals>
+                            <goal>clean</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

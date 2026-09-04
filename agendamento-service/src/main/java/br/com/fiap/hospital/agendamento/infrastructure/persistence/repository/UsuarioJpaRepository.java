@@ -1,0 +1,10 @@
+package br.com.fiap.hospital.agendamento.infrastructure.persistence.repository;
+
+import br.com.fiap.hospital.agendamento.infrastructure.persistence.entity.UsuarioEntity;
+import java.util.UUID;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface UsuarioJpaRepository extends JpaRepository<UsuarioEntity, UUID> {
+
+    java.util.Optional<UsuarioEntity> findByEmail(String email);
+}

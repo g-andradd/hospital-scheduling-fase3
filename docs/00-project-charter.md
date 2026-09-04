@@ -16,13 +16,13 @@
 
 | Papel | Quem | Responsabilidade |
 |---|---|---|
-| **Product Owner / Revisor** | Gabriel | Aprova specs, revisa PRs, decide trade-offs, valida a entrega |
+| **Product Owner / Revisor** | Gabriel | Aprova specs, revisa PRs, decide trade-offs, valida a entrega. **É o único que executa Git**: commits, pushes, merges, tags e PRs |
 | **Gestor / Engenheiro de Prompt** | Claude (chat) | Mantém o charter, o `openspec/config.yaml` e o roadmap; escreve o enunciado de cada `/opsx:propose`; audita entregas contra os critérios de aceite |
-| **Engenheiro de Software** | Claude Code | Roda `/opsx:propose`, `/opsx:apply` e `/opsx:archive`; implementa, testa, abre PRs, mantém o build verde |
+| **Engenheiro de Software** | Codex (Claude Code no M00–M04) | Roda `/opsx:propose`, `/opsx:apply` e `/opsx:archive`; implementa, testa, mantém o build verde. **Não executa Git** — entrega os comandos prontos ao Gabriel |
 
 **Regra de ouro:** nenhuma linha de código é escrita sem uma proposta aprovada. Se o Claude Code precisar tomar uma decisão que a spec não cobre, ele **para e pergunta** em vez de improvisar.
 
-O OpenSpec torna essa regra mecânica: a proposta deixa de ser uma mensagem de chat e vira um artefato versionado (`openspec/changes/<id>/`), revisado antes do código e arquivado depois do merge. O fluxo completo está em [`docs/05-fluxo-de-trabalho.md`](05-fluxo-de-trabalho.md).
+O OpenSpec torna essa regra mecânica: a proposta deixa de ser uma mensagem de chat e vira um artefato versionado (`openspec/changes/<id>/`), revisado antes do código e arquivado junto com ele. O fluxo completo está em [`docs/05-fluxo-de-trabalho.md`](05-fluxo-de-trabalho.md).
 
 ---
 
@@ -95,5 +95,5 @@ Três releases, conforme `docs/05-fluxo-de-trabalho.md` §4:
 - [ ] ADRs escritos.
 - [ ] Relatório técnico em DOCX.
 - [ ] Repositório público no GitHub com histórico GitFlow legível: `main` com três tags, `develop` com os merges `--no-ff` de cada change.
-- [ ] `openspec/changes/` vazio e `openspec/archive/` com as 15 changes arquivadas.
+- [ ] `openspec/changes/` sem change ativa e `openspec/changes/archive/` com as 15 changes arquivadas.
 - [ ] `openspec/specs/` refletindo as seis capabilities construídas.

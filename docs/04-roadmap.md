@@ -43,6 +43,7 @@ M06/M07 e M08/M09 são paralelizáveis depois do M05. Duas sessões do Claude Co
 - `StatusConsulta.podeTransicionarPara()` implementa a máquina de estados: `AGENDADA → CONFIRMADA | CANCELADA | REALIZADA`; `CONFIRMADA → REALIZADA | CANCELADA`; `REALIZADA` e `CANCELADA` são terminais.
 - Fakes em memória das portas em `src/test`. Nada de Mockito para as portas.
 - Zero import de `org.springframework`, `jakarta.persistence`, `jakarta.validation` ou `com.fasterxml` nestes dois pacotes.
+- **Configure o Mockito como java agent no surefire**, em vez de deixá-lo se auto-anexar. O build do M00 já emite `Mockito is currently self-attaching to enable the inline-mock-maker. This will no longer work in future releases of the JDK` — com testes de verdade a partir daqui, o aviso passa a aparecer em toda execução. Cuidado ao montar o `argLine`: o JaCoCo já o define, então use `@{argLine}` para compor, nunca sobrescrever, senão a cobertura para de ser medida silenciosamente.
 
 **Critérios de aceite**
 - Um cenário de teste por regra: passado, conflito de médico, conflito de paciente, cada transição inválida, cancelamento sem motivo, alteração de consulta em status terminal
@@ -174,6 +175,13 @@ acessa os próprios recursos.
 - `default-requeue-rejected: false`. Sem isso, mensagem envenenada volta pra fila infinitamente e derruba o consumidor.
 - Jackson com `JavaTimeModule` e ISO-8601, sem timestamps numéricos.
 - `CONSULTA_ATUALIZADA` preenche `alteracoes` com os valores anteriores.
+
+**Duas correções que o M05 carrega, achadas na revisão do M03**
+
+Nenhuma das duas justifica change própria: o M05 já cria migration neste banco e já mexe nesta capability, e um ciclo completo de proposta para cada uma custaria mais do que vale.
+
+- **Double-booking sob concorrência.** As queries de conflito do M02 são *time-of-check/time-of-use*: duas transações simultâneas passam pela verificação antes de qualquer commit e ambas inserem. O design do M02 descartou `tstzrange` + GiST por legibilidade, mas essa era a única alternativa **correta sob concorrência** — a comparação foi feita na dimensão errada, e legibilidade não compensa permitir agenda dupla. Entra como `MODIFIED Requirement` em "Detecção de conflito resolvida pelo armazenamento", com migration `V3` criando `EXCLUDE USING gist` — exige a extensão `btree_gist` para a igualdade de `uuid` — e um teste de integração provando que duas inserções concorrentes sobrepostas **não** passam as duas.
+- **A spec mente sobre offset.** O Requirement "Durabilidade das consultas" diz que a consulta recuperada apresenta "o instante com seu deslocamento de fuso". `timestamptz` preserva o instante e **descarta** o deslocamento; isso foi apontado no relatório do M02 e não chegou ao texto. Entra como `MODIFIED Requirement` corrigindo a redação para falar em instante, não em deslocamento.
 
 **Critérios de aceite**
 - `@DataJpaTest` provando atomicidade: exceção após salvar a consulta deixa o outbox vazio
@@ -317,6 +325,15 @@ tabela de autorização vira um Scenario e um teste.
 
 **Escopo:** teste de contrato cruzado com fixture compartilhado, smoke test e2e, agregação JaCoCo com gate.
 
+**Dívida herdada do M03 — ampliar o `EntradasHostisIT`**
+
+O M03 criou `EntradasHostisIT`, que ataca os endpoints com entradas hostis e exige que nenhuma resposta seja 5xx. Cinco rodadas de revisão automática mostraram que **o teste vale exatamente o que vale a tabela de entradas dele** — cada achado foi uma dimensão que a tabela não cobria: id inexistente com FK, offset de paginação estourando `Integer.MAX_VALUE`, borda de `OffsetDateTime`.
+
+O M10 assume esse teste como trabalho próprio, não remendo:
+- Uma dimensão por tipo de campo — uuid, enum, data, inteiro, texto, corpo — aplicada a **todos** os endpoints por varredura, não caso a caso
+- Achados adiados no M03 entram aqui; consulte os comentários resolvidos dos PRs do M03
+- Considerar geração baseada em propriedades no lugar da tabela fixa, se o prazo permitir
+
 **Notas técnicas obrigatórias**
 - O **fixture JSON do evento fica em `shared-contracts/src/test/resources`** e é usado pelo produtor e pelos dois consumidores. É isso que garante que produtor e consumidor não divirjam — mais valioso que um e2e frágil subindo três aplicações.
 - `scripts/smoke-test.sh`: login → cria consulta → aguarda → verifica notificação → query GraphQL, validando com `jq`, saindo diferente de zero em qualquer falha.
@@ -332,7 +349,7 @@ tabela de autorização vira um Scenario e um teste.
 
 **Notas técnicas obrigatórias**
 - Regras ArchUnit: `domain` não depende de `application` nem `infrastructure`; `domain` sem Spring/JPA/Jackson/Validation; classes `*UseCase` com exatamente um método público; entidades JPA só em `infrastructure.persistence`; controllers não injetam repositório, só caso de uso; nada de `System.out`.
-- `correlationId`: filtro HTTP gera ou lê `X-Correlation-Id` → MDC → header AMQP no relay → MDC no consumidor. O mesmo id tem que aparecer nos três logs para um único fluxo.
+- `correlationId`: **o filtro HTTP foi antecipado para o M03**, porque o `ProblemDetail` do §8 já exige o campo. Aqui resta a propagação: header AMQP no relay do outbox → MDC no consumidor, nos dois serviços. O filtro em si só precisa ser replicado no notificacao e no historico. O mesmo id tem que aparecer nos três logs para um único fluxo.
 - Actuator expõe `health`, `info`, `metrics`, `prometheus`. **Nunca** `env` ou `beans`.
 
 ---
@@ -361,7 +378,7 @@ tabela de autorização vira um Scenario e um teste.
 - **A collection inteira roda no Runner, na ordem, sem edição manual.** Se precisa colar token à mão, está errada.
 - Cada request com `pm.test()` assertando status e campos.
 - Diagramas em **Mermaid**, para renderizarem direto no GitHub.
-- ADRs: 001 RabbitMQ vs Kafka · 002 três serviços · 003 monorepo multi-módulo · 004 matriz de autorização (a resolução da ambiguidade do enunciado) · 005 JWT stateless · 006 Transactional Outbox · 007 Clean Architecture só no core. Formato: Contexto / Decisão / Alternativas / Consequências / Status.
+- **Os ADRs são escritos ao longo do projeto**, no change em que a decisão se materializa (ver "Onde cada ADR é escrito", adiante). O M13 **consolida**: revisa os sete, uniformiza o formato (Contexto / Decisão / Alternativas / Consequências / Status), cria o índice em `docs/adr/README.md` e liga cada ADR ao change que o originou.
 
 ---
 
@@ -379,6 +396,22 @@ tabela de autorização vira um Scenario e um teste.
 **➜ Ao fim deste change: abrir `release/1.0.0` e tagear `v1.0.0`.**
 
 ---
+
+## Onde cada ADR é escrito
+
+Um ADR escrito meses depois da decisão vira ficção retrospectiva. Cada um nasce no change que materializa a decisão, com a discussão ainda fresca — o `design.md` daquele change é o rascunho natural.
+
+| ADR | Decisão | Change |
+|---|---|---|
+| ADR-001 | RabbitMQ em vez de Kafka | M05 · `add-event-publishing-outbox` |
+| ADR-002 | Três serviços, com histórico separado | M00 · `bootstrap-monorepo` |
+| ADR-003 | Monorepo Maven multi-módulo | M00 · `bootstrap-monorepo` |
+| ADR-004 | Matriz de autorização e a ambiguidade do enunciado | M04 · `add-autenticacao-jwt` |
+| ADR-005 | JWT stateless em vez de sessão | M04 · `add-autenticacao-jwt` |
+| ADR-006 | Transactional Outbox | M05 · `add-event-publishing-outbox` |
+| ADR-007 | Clean Architecture só no serviço de agendamento | M01 · `add-agendamento-domain` |
+
+Escrever o ADR é **task do change correspondente**, não trabalho de fim de projeto. O M13 apenas consolida.
 
 ## Estimativa
 

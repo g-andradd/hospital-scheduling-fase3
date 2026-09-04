@@ -100,12 +100,18 @@ Regras de trabalho:
    → merge → /opsx:archive. Você nunca pula a etapa de revisão.
 3. Se a spec não cobrir uma decisão que você precisa tomar, PARE e pergunte.
    Não improvise nem invente requisito.
-4. GitFlow completo, conforme docs/05-fluxo-de-trabalho.md. Merges com --no-ff.
+4. VOCÊ NÃO EXECUTA GIT. Nada de commit, push, branch, merge, tag ou abertura
+   de PR — essas operações são exclusivamente minhas. Você edita arquivos, roda
+   build e testes, marca as tasks, e ao final de cada etapa me entrega o bloco de
+   comandos git pronto, com as mensagens de commit já redigidas. Se precisar que
+   algo esteja commitado para prosseguir, pare e me peça.
+5. GitFlow completo, conforme docs/05-fluxo-de-trabalho.md. Merges com --no-ff.
    Conventional Commits em português.
-5. Uma change só é arquivada quando atende a Definition of Done da seção 6 de
+6. Uma change só é arquivada quando atende a Definition of Done da seção 6 de
    docs/05-fluxo-de-trabalho.md.
-6. Ao terminar uma change, me apresente: o que foi feito, os critérios de aceite
-   atendidos um a um, e o que ficou pendente ou em dúvida.
+7. Ao terminar uma change, me apresente: o que foi feito, os critérios de aceite
+   atendidos um a um, o que ficou pendente ou em dúvida, e os comandos git para
+   eu executar.
 
 Comece confirmando que leu os sete documentos: resuma em 10 linhas o que este
 sistema faz, qual é a arquitetura e como o fluxo de trabalho funciona. Em seguida,

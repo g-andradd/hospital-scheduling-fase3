@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>br.com.fiap.hospital</groupId>
+        <artifactId>hospital-scheduling-fase3</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>shared-contracts</artifactId>
+    <packaging>jar</packaging>
+
+    <name>shared-contracts</name>
+    <description>Envelope de eventos, payloads e topologia RabbitMQ compartilhados entre os servicos</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+    </dependencies>
+
+</project>
