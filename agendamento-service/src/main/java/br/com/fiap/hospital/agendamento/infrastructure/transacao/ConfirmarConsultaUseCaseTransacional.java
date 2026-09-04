@@ -20,7 +20,8 @@ public class ConfirmarConsultaUseCaseTransacional {
     }
 
     @Transactional
-    public ConsultaResumo executar(java.util.UUID consultaId) {
-        return delegado.executar(consultaId);
+    public ConsultaResumo executar(java.util.UUID consultaId,
+            br.com.fiap.hospital.agendamento.domain.SolicitanteAutenticado solicitante) {
+        return delegado.executar(consultaId, solicitante);
     }
 }

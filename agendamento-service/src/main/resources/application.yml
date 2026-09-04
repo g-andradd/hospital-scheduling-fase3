@@ -34,6 +34,14 @@ spring:
         max-page-size: 100
         default-page-size: 20
 
+hospital:
+  jwt:
+    # HS256 exige ao menos 32 bytes. O valor vem do ambiente; o padrao serve apenas
+    # para desenvolvimento local e nao deve ser usado em nenhum outro lugar.
+    secret: ${JWT_SECRET:troque-este-segredo-por-um-valor-aleatorio-de-no-minimo-32-bytes}
+    expiracao: PT8H
+    emissor: hospital-agendamento
+
 springdoc:
   api-docs:
     path: /v3/api-docs

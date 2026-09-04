@@ -21,7 +21,8 @@ public class ListarConsultasUseCaseTransacional {
     }
 
     @Transactional(readOnly = true)
-    public Pagina<ConsultaResumo> executar(ListarConsultasQuery query) {
-        return delegado.executar(query);
+    public Pagina<ConsultaResumo> executar(ListarConsultasQuery query,
+            br.com.fiap.hospital.agendamento.domain.SolicitanteAutenticado solicitante) {
+        return delegado.executar(query, solicitante);
     }
 }

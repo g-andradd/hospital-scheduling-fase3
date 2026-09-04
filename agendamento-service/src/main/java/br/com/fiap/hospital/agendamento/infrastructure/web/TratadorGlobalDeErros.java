@@ -1,6 +1,8 @@
 package br.com.fiap.hospital.agendamento.infrastructure.web;
 
+import br.com.fiap.hospital.agendamento.domain.exception.AcessoNegadoException;
 import br.com.fiap.hospital.agendamento.domain.exception.AgendamentoForaDoHorizonteException;
+import br.com.fiap.hospital.agendamento.domain.exception.CredencialInvalidaException;
 import br.com.fiap.hospital.agendamento.domain.exception.AgendamentoNoPassadoException;
 import br.com.fiap.hospital.agendamento.domain.exception.AlteracaoConcorrenteException;
 import br.com.fiap.hospital.agendamento.domain.exception.ConflitoDeAgendaException;
@@ -119,6 +121,55 @@ public class TratadorGlobalDeErros extends ResponseEntityExceptionHandler {
     public ProblemDetail argumentoInvalido(
             IllegalArgumentException e, HttpServletRequest requisicao) {
         return problema(TipoDeErro.ARGUMENTO_INVALIDO, e.getMessage(), requisicao);
+    }
+
+    /**
+     * Credencial recusada.
+     *
+     * <p>Detalhe unico para e-mail inexistente, senha errada e usuario inativo: dizer
+     * qual dos tres falhou informaria se o e-mail existe.
+     */
+    @ExceptionHandler(CredencialInvalidaException.class)
+    public ProblemDetail credencialInvalida(
+            CredencialInvalidaException e, HttpServletRequest requisicao) {
+        return problema(TipoDeErro.NAO_AUTENTICADO, "Credencial ausente ou invalida", requisicao);
+    }
+
+    /**
+     * Recusa pela regra de propriedade.
+     *
+     * <p>Distinta da recusa por perfil, que o Spring Security produz antes de a
+     * requisicao chegar ao caso de uso. Esta acontece quando o perfil permite a operacao
+     * mas nao sobre este recurso.
+     */
+    @ExceptionHandler(AcessoNegadoException.class)
+    public ProblemDetail acessoNegado(AcessoNegadoException e, HttpServletRequest requisicao) {
+        return problema(TipoDeErro.ACESSO_NEGADO, e.getMessage(), requisicao);
+    }
+
+    /**
+     * Recusa do {@code @PreAuthorize}.
+     *
+     * <p>O {@code AccessDeniedHandler} da cadeia de filtros so alcanca as recusas que
+     * acontecem NO filtro. A anotacao de metodo lanca dentro da invocacao do controller,
+     * entao a excecao sobe por aqui — e sem este tratador cairia no catch-all e viraria
+     * 500: recusa de autorizacao respondida como falha de servidor.
+     */
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ProblemDetail acessoNegadoPorPerfil(
+            org.springframework.security.access.AccessDeniedException e,
+            HttpServletRequest requisicao) {
+        return problema(
+                TipoDeErro.ACESSO_NEGADO, "Seu perfil nao permite esta operacao", requisicao);
+    }
+
+    /** Mesma razao do anterior, para falhas de autenticacao levantadas apos o filtro. */
+    @ExceptionHandler(org.springframework.security.core.AuthenticationException.class)
+    public ProblemDetail naoAutenticado(
+            org.springframework.security.core.AuthenticationException e,
+            HttpServletRequest requisicao) {
+        return problema(
+                TipoDeErro.NAO_AUTENTICADO, "Credencial ausente ou invalida", requisicao);
     }
 
     // ------------------------------------------------------------- Spring MVC

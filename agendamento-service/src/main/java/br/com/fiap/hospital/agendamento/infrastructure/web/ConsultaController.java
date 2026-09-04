@@ -21,6 +21,7 @@ import java.time.OffsetDateTime;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -39,8 +40,10 @@ import org.springframework.web.bind.annotation.RestController;
  * e so convencao: os casos de uso deixaram de ser beans, entao injetar o tipo nu aqui
  * faria a aplicacao falhar na subida, em vez de rodar sem transacao em silencio.
  *
- * <p>Sem autorizacao nesta etapa. Os endpoints estao abertos e sao protegidos no M04,
- * conforme a matriz de docs/02-especificacao-funcional.md secao 3.
+ * <p>Cada endpoint declara a permissao de perfil conforme a matriz de
+ * docs/02-especificacao-funcional.md secao 3. A regra de propriedade — paciente so
+ * alcanca o que e dele — nao mora aqui: ela viaja no {@code SolicitanteAutenticado} que
+ * os casos de uso exigem, e por isso nao pode ser esquecida por omissao.
  */
 @RestController
 @RequestMapping("/api/v1/consultas")
@@ -70,6 +73,7 @@ public class ConsultaController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('MEDICO', 'ENFERMEIRO')")
     @Operation(summary = "Registra uma nova consulta")
     public ResponseEntity<ConsultaResponse> registrar(
             @Valid @RequestBody RegistrarConsultaRequest requisicao) {
@@ -88,6 +92,7 @@ public class ConsultaController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('MEDICO', 'ENFERMEIRO')")
     @Operation(
             summary = "Altera uma consulta existente",
             description = "Campo ausente PRESERVA o valor atual. Para apagar as observacoes, "
@@ -106,12 +111,14 @@ public class ConsultaController {
     }
 
     @PatchMapping("/{id}/confirmar")
+    @PreAuthorize("hasAnyRole('MEDICO', 'ENFERMEIRO', 'PACIENTE')")
     @Operation(summary = "Confirma uma consulta agendada")
     public ConsultaResponse confirmar(@PathVariable UUID id) {
-        return ConsultaResponse.de(confirmar.executar(id));
+        return ConsultaResponse.de(confirmar.executar(id, SolicitanteDaRequisicao.atual()));
     }
 
     @PatchMapping("/{id}/cancelar")
+    @PreAuthorize("hasAnyRole('MEDICO', 'ENFERMEIRO')")
     @Operation(summary = "Cancela uma consulta, com motivo obrigatorio")
     public ConsultaResponse cancelar(
             @PathVariable UUID id, @Valid @RequestBody CancelarConsultaRequest requisicao) {
@@ -120,12 +127,14 @@ public class ConsultaController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('MEDICO', 'ENFERMEIRO', 'PACIENTE')")
     @Operation(summary = "Recupera uma consulta pelo identificador")
     public ConsultaResponse porId(@PathVariable UUID id) {
-        return ConsultaResponse.de(buscar.executar(id));
+        return ConsultaResponse.de(buscar.executar(id, SolicitanteDaRequisicao.atual()));
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('MEDICO', 'ENFERMEIRO', 'PACIENTE')")
     @Operation(
             summary = "Lista consultas, paginado",
             description = "Filtros opcionais combinados com E. O tamanho de pagina tem teto de "
@@ -143,8 +152,10 @@ public class ConsultaController {
             @RequestParam(defaultValue = "20") int tamanho) {
 
         return PaginaResponse.de(
-                listar.executar(new ListarConsultasQuery(
-                        pacienteId, medicoId, status, de, ate, pagina, tamanho)),
+                listar.executar(
+                        new ListarConsultasQuery(
+                                pacienteId, medicoId, status, de, ate, pagina, tamanho),
+                        SolicitanteDaRequisicao.atual()),
                 ConsultaResponse::de);
     }
 }
