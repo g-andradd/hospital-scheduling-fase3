@@ -10,7 +10,6 @@ import br.com.fiap.hospital.agendamento.application.ListarConsultasUseCase;
 import br.com.fiap.hospital.agendamento.domain.port.ConsultaRepositoryPort;
 import br.com.fiap.hospital.agendamento.domain.port.EventPublisherPort;
 import br.com.fiap.hospital.agendamento.domain.port.VerificadorDeSenhaPort;
-import br.com.fiap.hospital.agendamento.infrastructure.messaging.EventPublisherLogAdapter;
 import br.com.fiap.hospital.agendamento.domain.port.UsuarioRepositoryPort;
 import java.time.Clock;
 import java.time.ZoneId;
@@ -41,12 +40,6 @@ public class CasosDeUsoConfig {
     @Bean
     public Clock clock() {
         return Clock.system(ZoneId.of("America/Sao_Paulo"));
-    }
-
-    /** Provisorio: substituido pelo publicador com outbox no M05. */
-    @Bean
-    public EventPublisherPort eventPublisherPort() {
-        return new EventPublisherLogAdapter();
     }
 
     // Os casos de uso NUS nao sao beans. Cada um e construido aqui dentro e entregue ao

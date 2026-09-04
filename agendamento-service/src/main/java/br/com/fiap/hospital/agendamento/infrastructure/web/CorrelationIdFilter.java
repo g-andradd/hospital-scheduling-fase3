@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.UUID;
+import org.slf4j.MDC;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -19,8 +20,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * requisicao, e dali o tratador de erros o copia para o ProblemDetail, e volta no
  * cabecalho da resposta.
  *
- * <p>Antecipado do M11 porque o ProblemDetail da secao 8 ja exige o campo. Ao M11 resta
- * levar este mesmo id ao MDC, ao cabecalho AMQP do relay e ao consumidor, e replicar o
+ * <p>Antecipado do M11 porque o ProblemDetail da secao 8 ja exige o campo. M05 leva este id ao MDC e ao envelope persistido. Ao M11 resta
+ * propagar este mesmo id ao consumidor e replicar o
  * filtro nos outros dois servicos.
  */
 @Component
@@ -42,7 +43,14 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
 
         requisicao.setAttribute(ATRIBUTO, correlationId);
         resposta.setHeader(CABECALHO, correlationId);
-        cadeia.doFilter(requisicao, resposta);
+        String anterior = MDC.get(ATRIBUTO);
+        MDC.put(ATRIBUTO, correlationId);
+        try {
+            cadeia.doFilter(requisicao, resposta);
+        } finally {
+            if (anterior == null) MDC.remove(ATRIBUTO);
+            else MDC.put(ATRIBUTO, anterior);
+        }
     }
 
     /** Recupera o id da requisicao corrente, gerando um se o filtro nao passou. */

@@ -5,4 +5,6 @@
 # inseridas por caminho nenhum — nao ha codigo de seed carregado que possa errar um if.
 spring:
   flyway:
+    # V900 ja pode ter sido aplicada num banco demo criado antes do M05.
+    out-of-order: true
     locations: classpath:db/migration,classpath:db/demo

@@ -1,0 +1,33 @@
+{
+  "eventId": "9c1c5a6e-2f3b-4a1d-8c77-1b2e3f4a5b6c",
+  "eventType": "CONSULTA_CRIADA",
+  "aggregateId": "3f8b2c1a-0000-4000-8000-000000000001",
+  "occurredAt": "2026-09-02T13:45:10.123Z",
+  "version": 1,
+  "correlationId": "correlacao-fixture-m05",
+  "payload": {
+    "consultaId": "3f8b2c1a-0000-4000-8000-000000000001",
+    "status": "AGENDADA",
+    "dataHora": "2026-09-10T14:00:00-03:00",
+    "duracaoMinutos": 30,
+    "observacoes": "Retorno",
+    "motivoCancelamento": null,
+    "paciente": {
+      "id": "a1b20000-0000-4000-8000-000000000001",
+      "nome": "Maria",
+      "email": "paciente@hospital.com",
+      "telefone": "+5561999990000"
+    },
+    "medico": {
+      "id": "c3d40000-0000-4000-8000-000000000001",
+      "nome": "Joao",
+      "crm": "DF-12345",
+      "especialidade": "Cardiologia"
+    },
+    "registradoPor": {
+      "id": "e5f60000-0000-4000-8000-000000000001",
+      "nome": "Ana",
+      "perfil": "ENFERMEIRO"
+    }
+  }
+}

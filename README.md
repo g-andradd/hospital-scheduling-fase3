@@ -25,7 +25,8 @@ flowchart LR
 
     C -->|REST| A
     C -->|GraphQL| H
-    A -->|publica| R
+    A -->|mesma transação| O[(PostgreSQL: consulta + outbox)]
+    O -->|relay at-least-once| R
     R -->|consulta.#| N
     R -->|consulta.#| H
     N --> M[Log / SMTP → Mailpit]
@@ -283,3 +284,31 @@ Cada uma das 15 changes do roadmap segue o ciclo `/opsx:propose` → revisão hu
 ## Licença
 
 MIT
+
+## Operação dos eventos de consulta (M05)
+
+O agendamento grava consulta e envelope na mesma transação. O relay publica lotes de até 50 a cada 1s após a conclusão do lote anterior. Notificação e histórico já recebem a configuração e as filas; seus consumidores de negócio entram em M06/M08.
+
+Os três serviços leem RABBITMQ_HOST (localhost ao executar na máquina; rabbitmq na rede Compose), RABBITMQ_PORT, RABBITMQ_USER e RABBITMQ_PASSWORD. As propriedades de consumo exigem default-requeue-rejected=false e três tentativas totais, com pausas de 1s e 2s. A topologia é declarada na primeira conexão ao broker. Testes desabilitam o scheduler e acionam o relay explicitamente.
+
+Uma falha de publicação mantém a linha pendente, sem teto de tentativas. Diagnóstico no agendamento_db:
+
+```sql
+SELECT count(*) AS pendentes, min(criado_em) AS fato_mais_antigo,
+       max(tentativas) AS maior_numero_de_falhas
+FROM outbox_evento WHERE publicado_em IS NULL;
+
+SELECT id, tipo_evento, criado_em, tentativas
+FROM outbox_evento WHERE publicado_em IS NULL
+ORDER BY tentativas, criado_em, id LIMIT 50;
+```
+
+Verifique conectividade, exchange/bindings e rejeições de publicação no Management UI do RabbitMQ. Nas DLQs notificacao.consultas.dlq e historico.consultas.dlq, x-death identifica a origem; a topologia normativa encaminha cada rejeição para ambas. Não há purge, expiração ou reenvio automático. Corrigir a causa antes de uma eventual operação manual; reprocessamento exige consumidores idempotentes. O dead-letter worker pode aguardar até seu próximo intervalo de 180s após restaurar o destino.
+
+V3 recusa sobreposições ativas preexistentes com mensagem em português e IDs/recurso: corrigir dados somente após análise humana, nunca desabilitar a exclusão. O seed V900 atual contém usuários/médico/pacientes, sem as cinco consultas descritas no roteiro de demonstração. Apenas o profile demo habilita Flyway out-of-order para aplicar V2/V3 depois de V900.
+
+Datas persistidas preservam instantes. O envelope deriva o offset de America/Sao_Paulo na data da consulta e congela essa representação; não recupera o offset original. Falhas transitórias 40P01/40001 retornam o type alteração concorrente, distinto do conflito de agenda 23P01; o cliente relê e tenta novamente, sem retry automático do serviço.
+
+Para uma parada operacional, desabilitar hospital.outbox.scheduler-enabled mantém as pendências. Migrations e dados permanecem; voltar à versão que só registrava eventos em log não mantém a garantia de publicação de fatos novos.
+
+Ver [ADR-001](docs/adr/ADR-001-rabbitmq.md), [ADR-006](docs/adr/ADR-006-transactional-outbox.md) e [contrato normativo](docs/03-contrato-de-eventos.md).

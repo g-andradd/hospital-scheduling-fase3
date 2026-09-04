@@ -66,10 +66,11 @@ public class AtualizarConsultaUseCase {
                 novoPeriodo != null ? novoPeriodo : consulta.periodo(),
                 consulta.id());
 
+        var anterior = EventoDeConsulta.Snapshot.de(consulta);
         consulta.atualizar(novoPeriodo, comando.medicoId(), comando.observacoes(), agora);
 
         Consulta salva = consultas.salvar(consulta);
-        eventos.publicar(EventoDeConsulta.de(salva, TipoEventoConsulta.ATUALIZADA));
+        eventos.publicar(EventoDeConsulta.de(salva, TipoEventoConsulta.ATUALIZADA, anterior));
         return ConsultaResumo.de(salva);
     }
 

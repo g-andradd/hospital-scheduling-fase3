@@ -55,12 +55,12 @@ class EventoDeConsultaTest {
     @Test
     @DisplayName("campos obrigatorios ausentes sao recusados")
     void camposObrigatoriosAusentes() {
-        assertThatThrownBy(() -> new EventoDeConsulta(null, TipoEventoConsulta.CRIADA, AGORA))
+        assertThatThrownBy(() -> new EventoDeConsulta(null, TipoEventoConsulta.CRIADA, AGORA, null, null))
                 .isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> new EventoDeConsulta(UUID.randomUUID(), null, AGORA))
+        assertThatThrownBy(() -> new EventoDeConsulta(UUID.randomUUID(), null, AGORA, null, null))
                 .isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() ->
-                        new EventoDeConsulta(UUID.randomUUID(), TipoEventoConsulta.CRIADA, null))
+                        new EventoDeConsulta(UUID.randomUUID(), TipoEventoConsulta.CRIADA, null, null, null))
                 .isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> EventoDeConsulta.de(null, TipoEventoConsulta.CRIADA))
                 .isInstanceOf(NullPointerException.class);

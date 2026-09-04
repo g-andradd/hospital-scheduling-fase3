@@ -3,15 +3,16 @@ package br.com.fiap.hospital.agendamento.domain.exception;
 import java.util.UUID;
 
 /**
- * Duas alteracoes concorrentes atingiram a mesma consulta e uma delas perdeu.
+ * Falha transitória de concorrência: lock otimista ou transação recusada pelo banco
+ * por deadlock/serialização. Não afirma que o horário está ocupado nem que outra
+ * transação confirmou uma alteração.
  *
- * <p>Existe para que a falha de lock otimista chegue as camadas de cima como conceito
- * de dominio. Sem ela, um tipo do Spring subiria pela aplicacao e o M03 precisaria
- * conhecer excecoes de persistencia para montar o ProblemDetail. Mapeada para 409.
+ * <p>Mapeada para 409 com type de alteração concorrente. A operação é desfeita
+ * integralmente; o cliente deve reler e tentar novamente. Não há retry automático.
  */
 public class AlteracaoConcorrenteException extends RuntimeException {
 
     public AlteracaoConcorrenteException(UUID consultaId) {
-        super("A consulta " + consultaId + " foi alterada por outra operacao. Recarregue e tente novamente");
+        super("A consulta " + consultaId + " nao pode ser gravada devido a concorrencia. Recarregue e tente novamente");
     }
 }
