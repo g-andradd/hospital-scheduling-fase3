@@ -14,4 +14,13 @@ public interface UsuarioRepositoryPort {
     Optional<Medico> buscarMedicoPorId(UUID id);
 
     Optional<Usuario> buscarUsuarioPorId(UUID id);
+
+    /** Busca por e-mail, para a autenticacao. */
+    Optional<Usuario> buscarUsuarioPorEmail(String email);
+
+    /** Paciente associado ao usuario, quando houver. */
+    Optional<Paciente> buscarPacientePorUsuario(UUID usuarioId);
+
+    /** Medico associado ao usuario, quando houver. */
+    Optional<Medico> buscarMedicoPorUsuario(UUID usuarioId);
 }

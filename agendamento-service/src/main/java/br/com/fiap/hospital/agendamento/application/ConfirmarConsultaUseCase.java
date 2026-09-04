@@ -2,7 +2,9 @@ package br.com.fiap.hospital.agendamento.application;
 
 import br.com.fiap.hospital.agendamento.domain.Consulta;
 import br.com.fiap.hospital.agendamento.domain.EventoDeConsulta;
+import br.com.fiap.hospital.agendamento.domain.SolicitanteAutenticado;
 import br.com.fiap.hospital.agendamento.domain.TipoEventoConsulta;
+import br.com.fiap.hospital.agendamento.domain.exception.AcessoNegadoException;
 import br.com.fiap.hospital.agendamento.domain.exception.ConsultaNaoEncontradaException;
 import br.com.fiap.hospital.agendamento.domain.port.ConsultaRepositoryPort;
 import br.com.fiap.hospital.agendamento.domain.port.EventPublisherPort;
@@ -24,11 +26,16 @@ public class ConfirmarConsultaUseCase {
         this.clock = clock;
     }
 
-    public ConsultaResumo executar(UUID consultaId) {
+    /** O solicitante e obrigatorio: paciente so confirma consulta de que e titular. */
+    public ConsultaResumo executar(UUID consultaId, SolicitanteAutenticado solicitante) {
         OffsetDateTime agora = OffsetDateTime.now(clock);
 
         Consulta consulta = consultas.buscarPorId(consultaId)
                 .orElseThrow(() -> new ConsultaNaoEncontradaException(consultaId));
+
+        if (solicitante.ePaciente() && !solicitante.eTitularDe(consulta)) {
+            throw new AcessoNegadoException("Esta consulta pertence a outro paciente");
+        }
 
         consulta.confirmar(agora);
 
