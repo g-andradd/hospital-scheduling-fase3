@@ -10,7 +10,7 @@ Cada requisito tem um id. Todo PR deve citar os ids que fecha. A auditoria final
 | `agendamento-de-consultas` | RF-05 a RF-10, RNF-03, RNF-09, RNF-10 |
 | `mensageria-de-eventos` | RF-15, RF-20 |
 | `notificacoes-ao-paciente` | RF-16, RF-17, RF-19 |
-| `historico-de-consultas` | RF-11 a RF-14, RF-18 |
+| `historico-de-consultas` | RF-11 a RF-14, RF-18, RF-19 |
 | `operacao-do-ambiente` | RNF-04 a RNF-08 |
 
 ## 1. Requisitos funcionais
