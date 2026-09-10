@@ -125,7 +125,7 @@ grep -o '<counter type="LINE"[^/]*/>' notificacao-service/target/site/jacoco/jac
   - trocar o `update` do cancelamento por `delete` → `AgendaLocalIT` fica vermelho;
   - remover a condição de `occurredAt` do upsert → `OrdenacaoAgendaIT` fica vermelho, com a agenda regredindo e a atualização antiga ressuscitando a consulta;
   - inverter a ordem, gravando a marca antes do efeito → a **cobertura estrutural de sequência** fica vermelha. Esta mutação **não** é verificada pelo teste de rollback, que passa nas duas ordens; ligá-la ao teste errado daria falso conforto.
-- [ ] 8.6 Verificar a partir de clone limpo da feature branch, depois do push, em diretório temporário único, e removê-lo após registrar o resultado.
+- [x] 8.6 Verificar a partir de clone limpo da feature branch, depois do push, em diretório temporário único, e removê-lo após registrar o resultado.
 
 ```bash
 set -eu; TMP=$(mktemp -d); [ -d "$TMP" ] || { echo "mktemp falhou"; exit 1; }; TMP=$(cd "$TMP" && pwd -P); case "$TMP" in "$(cd "${TMPDIR:-/tmp}" && pwd -P)"/*) ;; *) echo "alvo fora do temporario: $TMP"; exit 1;; esac; trap 'rm -rf "$TMP"' EXIT INT TERM; git clone -b feature/m06-add-notificacao-consumer https://github.com/g-andradd/hospital-scheduling-fase3.git "$TMP/repo"; cd "$TMP/repo"; mvn -q clean verify
