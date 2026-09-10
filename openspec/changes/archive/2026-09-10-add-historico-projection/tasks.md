@@ -41,7 +41,7 @@
 
 - [x] 7.1 Atualizar README e documentação de arquitetura/modelo físico com projeção, idempotência, regra de ordenação, DLQ, ausência de HTTP, operação e rollback; preservar a alteração de sequência já feita pelo Gabriel em `docs/04-roadmap.md` e verificar todos os links.
 - [x] 7.2a Manter a matriz abaixo alinhada aos métodos e casos parametrizados reais; conferir os 15 Scenarios sem usar apenas nome de classe ou task marcada como substituto de execução.
-- [ ] 7.2b Levar a evidência da matriz ao corpo do PR quando Gabriel criar o PR.
+- [x] 7.2b Levar a evidência da matriz ao corpo do PR quando Gabriel criar o PR. Matriz dos 15 Scenarios publicada no corpo do PR #17.
 
 ### Matriz cenário → método/caso
 
@@ -70,4 +70,4 @@
 - [x] 8.3 Conferir JaCoCo do `historico-service` e cobertura global mínima de 85%, registrando números reais sem antecipar agregação do M10.
 - [x] 8.4 Executar as coberturas estruturais de listener idempotente e ausência de cliente HTTP; conferir schema/JSONB, configuração efetiva de retry e inexistência de índices secundários antecipados.
 - [x] 8.5 Demonstrar as três mutações de D6 — omitir a marca final, tornar o upsert incondicional e engolir a rejeição — e repetir as suítes afetadas após restaurar cada alteração.
-- [ ] 8.6 Entregar ao Gabriel comandos para commit/push e clone limpo da feature; registrar `mvn -q clean verify` do clone antes da aprovação. Após aprovação, promover e arquivar a change nesta mesma branch, entregar o commit do archive e exigir push antes do merge do único PR.
+- [x] 8.6 Entregar ao Gabriel comandos para commit/push e clone limpo da feature; registrar `mvn -q clean verify` do clone antes da aprovação. Após aprovação, promover e arquivar a change nesta mesma branch, entregar o commit do archive e exigir push antes do merge do único PR. Concluída em fechamento corretivo: PR #17 mergeado em `06d362f` sem o archive; clone limpo de `origin/develop` verde com 975 testes e zero ignorados; promoção e archive feitos na branch `chore/m08-archive`, cujo PR ainda precisa ser mergeado em `develop`.
