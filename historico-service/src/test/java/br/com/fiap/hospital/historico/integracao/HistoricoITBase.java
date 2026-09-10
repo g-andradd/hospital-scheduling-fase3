@@ -48,28 +48,15 @@ import org.springframework.test.util.AopTestUtils;
 import org.springframework.test.util.ReflectionTestUtils;
 import javax.sql.DataSource;
 import org.awaitility.Awaitility;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.containers.RabbitMQContainer;
 
 @SpringBootTest(properties = "logging.level.root=ERROR")
 @Import(HistoricoITBase.ConfiguracaoDeTeste.class)
 abstract class HistoricoITBase {
     static final Instant INSTANTE_DE_CRIACAO = Instant.parse("2026-09-01T12:00:00Z");
-    private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16")
-            .withDatabaseName("historico_db").withUsername("hospital").withPassword("hospital");
-    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:3.13-management");
-    static { POSTGRES.start(); RABBIT.start(); }
 
     @DynamicPropertySource
     static void propriedades(DynamicPropertyRegistry registro) {
-        registro.add("spring.datasource.url", POSTGRES::getJdbcUrl);
-        registro.add("spring.datasource.username", POSTGRES::getUsername);
-        registro.add("spring.datasource.password", POSTGRES::getPassword);
-        registro.add("spring.datasource.hikari.maximum-pool-size", () -> 3);
-        registro.add("spring.rabbitmq.host", RABBIT::getHost);
-        registro.add("spring.rabbitmq.port", RABBIT::getAmqpPort);
-        registro.add("spring.rabbitmq.username", RABBIT::getAdminUsername);
-        registro.add("spring.rabbitmq.password", RABBIT::getAdminPassword);
+        ContainersDoHistorico.registrar(registro);
     }
 
     @SpyBean JdbcTemplate jdbc;

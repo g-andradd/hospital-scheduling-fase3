@@ -24,6 +24,29 @@ public class ConsultaHistoricoEntity {
     @Column(name = "atualizado_em", nullable = false) private Instant atualizadoEm;
 
     protected ConsultaHistoricoEntity() { }
+
+    /**
+     * Aplica a correcao manual do M09.
+     *
+     * <p>Nao ha setter para {@code id}, {@code pacienteId} nem {@code medicoId}: a
+     * identidade do registro nao e corrigivel, e a ausencia do metodo e a garantia — um
+     * campo que nao existe nao pode ser esquecido numa validacao.
+     *
+     * <p>{@code criadoEm} tambem nao muda: representa quando a projecao nasceu, e reescreve-lo
+     * apagaria a diferenca entre um registro antigo corrigido e um registro novo.
+     */
+    public void corrigir(String pacienteNome, String medicoNome, String especialidade,
+                         OffsetDateTime dataHora, String status, String observacoes,
+                         Instant atualizadoEm) {
+        this.pacienteNome = pacienteNome;
+        this.medicoNome = medicoNome;
+        this.especialidade = especialidade;
+        this.dataHora = dataHora;
+        this.status = status;
+        this.observacoes = observacoes;
+        this.atualizadoEm = atualizadoEm;
+    }
+
     public UUID getId() { return id; }
     public UUID getPacienteId() { return pacienteId; }
     public String getPacienteNome() { return pacienteNome; }
