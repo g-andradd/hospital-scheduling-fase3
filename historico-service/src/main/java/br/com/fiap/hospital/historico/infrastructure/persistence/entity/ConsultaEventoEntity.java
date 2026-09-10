@@ -26,6 +26,18 @@ public class ConsultaEventoEntity implements Persistable<UUID> {
         id = evento.eventId(); consultaId = evento.aggregateId(); tipoEvento = evento.eventType().name();
         ocorridoEm = evento.occurredAt(); this.payload = payload;
     }
+    /**
+     * Fato local da trilha, sem envelope AMQP por tras.
+     *
+     * <p>Existe para a correcao manual do M09, que e um fato do historico e nao um evento
+     * do contrato: nao tem eventId de origem, nao tem routing key e nao vira publicacao.
+     */
+    public ConsultaEventoEntity(UUID id, UUID consultaId, String tipoEvento, Instant ocorridoEm,
+                                String payload) {
+        this.id = id; this.consultaId = consultaId; this.tipoEvento = tipoEvento;
+        this.ocorridoEm = ocorridoEm; this.payload = payload;
+    }
+
     @Override public UUID getId() { return id; }
     @Override public boolean isNew() { return true; }
     public UUID getConsultaId() { return consultaId; }

@@ -285,6 +285,48 @@ Cada uma das 15 changes do roadmap segue o ciclo `/opsx:propose` → revisão hu
 
 MIT
 
+## Consulta do histórico por GraphQL (M09)
+
+O endpoint é `POST /graphql` e **exige token** — o mesmo JWT emitido por
+`POST /auth/login` no agendamento. O histórico não tem login próprio.
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8081/auth/login   -H 'Content-Type: application/json'   -d '{"email":"medico@hospital.com","senha":"Senha@123"}' | jq -r .accessToken)
+```
+
+Consultas disponíveis: `consultasDoPaciente(pacienteId:, filtro:)`,
+`consultasDoMedico(medicoId:, filtro:)`, `consulta(id:)` e `minhasConsultas(filtro:)` —
+esta última exclusiva do perfil PACIENTE, que resolve a identidade do token e não aceita
+identificador como argumento.
+
+```bash
+curl -s -X POST http://localhost:8083/graphql   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json'   -d '{"query":"query($p:ID!){ consultasDoPaciente(pacienteId:$p, filtro:{periodo:FUTURAS, status:[AGENDADA,CONFIRMADA]}) { id dataHora status medicoNome } }","variables":{"p":"<pacienteId>"}}'
+```
+
+O filtro combina período, intervalo e status por AND. `TODAS` não recorta pelo relógio;
+`FUTURAS` é `dataHora >= agora` e `PASSADAS` é `dataHora < agora`; o intervalo é `[de, ate)`,
+com `de` inclusivo e `ate` exclusivo. Lista de status vazia não restringe. O resultado vem
+ordenado por `dataHora` e, no empate, por `id`.
+
+A correção de registro é exclusiva de MEDICO:
+
+```bash
+curl -s -X POST http://localhost:8083/graphql   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json'   -d '{"query":"mutation($in:CorrigirRegistroHistoricoInput!){ corrigirRegistroHistorico(input:$in){ id status observacoes atualizadoEm } }","variables":{"in":{"consultaId":"<id>","justificativa":"status registrado por engano","status":"AGENDADA"}}}'
+```
+
+`consultaId` apenas seleciona o registro. **Não existem** campos para autor, `pacienteId`
+ou `medicoId`: o autor vem do token, e os identificadores não são corrigíveis — enviá-los é
+recusado com `BAD_REQUEST` antes de a operação executar. Campo ausente não corrige; nulo
+explícito só é aceito em `observacoes`, onde limpa o registro. Toda correção grava, na mesma
+transação, uma linha `CORRECAO_MANUAL` em `consulta_evento` com médico autor, justificativa e
+os valores antes e depois — se a auditoria falhar, a correção não vale.
+
+Erros saem com código estável em `extensions.code`: `FORBIDDEN`, `NOT_FOUND` e `BAD_REQUEST`.
+Falha inesperada devolve mensagem genérica, sem SQL nem stack trace.
+
+**GraphiQL** responde em `/graphiql` apenas nos profiles `dev` e `demo`; no profile padrão a
+interface fica desabilitada e o caminho é negado pela cadeia de segurança.
+
 ## Rollback do histórico (M08)
 
 Para rollback, parar o consumidor do histórico e preservar banco, filas, DLQ, trilha e marcas de processamento. Após a correção, retomar o consumidor; não apagar evidências nem reenviar mensagens confirmadas.

@@ -40,5 +40,53 @@ spring:
           multiplier: 2.0
           max-interval: 10000ms
 
+  graphql:
+    schema:
+      locations: classpath:graphql/
+    graphiql:
+      # Padrao desabilitado. Os profiles dev e demo ligam a interface E liberam o caminho:
+      # ligar sem liberar deixaria a pagina montada atras do denyAll, e liberar sem ligar
+      # abriria um caminho que nao serve para nada.
+      enabled: false
+
+hospital:
+  jwt:
+    # O historico nao emite token; valida o mesmo segredo dos demais servicos.
+    secret: ${JWT_SECRET:troque-este-segredo-por-um-valor-aleatorio-de-no-minimo-32-bytes}
+    expiracao: PT8H
+    emissor: hospital-agendamento
+  security:
+    caminhos:
+      # /graphql exige token em qualquer profile; o perfil e decidido no resolver.
+      autenticados: /api/**,/graphql
+
 server:
   port: 8083
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  graphql:
+    graphiql:
+      enabled: true
+hospital:
+  security:
+    caminhos:
+      autenticados: /api/**,/graphql
+      publicos-adicionais: /graphiql,/graphiql/**
+
+---
+spring:
+  config:
+    activate:
+      on-profile: demo
+  graphql:
+    graphiql:
+      enabled: true
+hospital:
+  security:
+    caminhos:
+      autenticados: /api/**,/graphql
+      publicos-adicionais: /graphiql,/graphiql/**

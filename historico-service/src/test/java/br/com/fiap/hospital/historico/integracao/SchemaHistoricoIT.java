@@ -26,12 +26,19 @@ class SchemaHistoricoIT extends HistoricoITBase {
         assertThat(jdbc.queryForObject("""
                 SELECT version FROM flyway_schema_history WHERE success = true
                 ORDER BY installed_rank DESC LIMIT 1
-                """, String.class)).isEqualTo("1");
+                """, String.class)).isEqualTo("2");
         List<String> indices = jdbc.queryForList("""
                 SELECT indexname FROM pg_indexes WHERE schemaname = 'public'
                 AND tablename IN ('consulta_historico', 'consulta_evento', 'evento_processado')
                 """, String.class);
-        assertThat(indices).containsExactlyInAnyOrder("consulta_historico_pkey", "consulta_evento_pkey", "evento_processado_pkey");
+        // O M08 exigia zero indice secundario porque nao havia consulta que o justificasse.
+        // O M09 mediu os planos das consultas que passou a expor e criou dois, em V2. O que
+        // esta asercao continua guardando e a ausencia de indice especulativo: nada de status,
+        // que e filtro de baixa seletividade e nunca aparece sozinho nas consultas expostas.
+        assertThat(indices).containsExactlyInAnyOrder(
+                "consulta_historico_pkey", "consulta_evento_pkey", "evento_processado_pkey",
+                "idx_consulta_historico_paciente_data_hora",
+                "idx_consulta_historico_medico_data_hora");
         List<String> pks = jdbc.queryForList("""
                 SELECT c.relname FROM pg_constraint p JOIN pg_class c ON c.oid = p.conrelid
                 WHERE p.contype = 'p' AND c.relname IN ('consulta_historico', 'consulta_evento', 'evento_processado')
@@ -59,7 +66,7 @@ class SchemaHistoricoIT extends HistoricoITBase {
         try {
             var isolado = Flyway.configure().dataSource(dataSource).schemas(schema).createSchemas(true)
                     .locations("classpath:db/migration").load();
-            assertThat(isolado.migrate().migrationsExecuted).isEqualTo(1);
+            assertThat(isolado.migrate().migrationsExecuted).isEqualTo(2);
             assertThat(isolado.migrate().migrationsExecuted).isZero();
         } finally {
             jdbc.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
@@ -69,7 +76,7 @@ class SchemaHistoricoIT extends HistoricoITBase {
     @Test @DisplayName("Scenario: Flyway conclui antes de JPA validate e do listener")
     void flywayConcluiAntesDeJpaValidateEDoListener() {
         assertThat(environment.getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate");
-        assertThat(flyway.info().applied()).hasSize(1);
+        assertThat(flyway.info().applied()).hasSize(2);
         assertThat(listeners.getListenerContainers()).hasSize(1);
         assertThat(listeners.getListenerContainers().iterator().next().isRunning()).isTrue();
         assertThat(snapshots.count()).isZero();

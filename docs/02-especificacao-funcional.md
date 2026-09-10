@@ -91,7 +91,7 @@ Consolidada a partir do enunciado §1 e §2 (ver ADR-004 para a resolução da a
 | Operação | MEDICO | ENFERMEIRO | PACIENTE |
 |---|:---:|:---:|:---:|
 | `consultasDoPaciente(pacienteId:)` | ✅ qualquer | ✅ qualquer | ✅ **apenas o próprio id**, senão 403 |
-| `minhasConsultas` | ✅ | ✅ | ✅ |
+| `minhasConsultas` | ❌ 403 | ❌ 403 | ✅ **as proprias, resolvidas do token** |
 | `consultasDoMedico(medicoId:)` | ✅ | ✅ | ❌ 403 |
 | `consulta(id:)` | ✅ | ✅ | ✅ (só se for sua) |
 | `corrigirRegistroHistorico` (mutation) | ✅ | ❌ 403 | ❌ 403 |

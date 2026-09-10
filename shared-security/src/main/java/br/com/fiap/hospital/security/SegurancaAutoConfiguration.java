@@ -17,10 +17,14 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 /**
  * Cadeia de filtros compartilhada pelos servicos.
  *
- * <p>Reaproveitavel, mas so o agendamento a consome hoje: notificacao e historico ainda
- * nao expoem endpoint algum, e configurar seguranca sobre nada seria construir para um
- * consumidor imaginario. O que os torna consumiveis depois e a forma desta classe, nao
- * codigo extra — basta a dependencia.
+ * <p>Dois servicos a consomem: o agendamento, com sua API REST, e o historico, que expoe
+ * {@code /graphql} desde o M09. A notificacao continua sem endpoint e sem esta dependencia.
+ *
+ * <p>O que permitiu o segundo consumidor sem duplicar cadeia foram as duas listas
+ * configuraveis abaixo. O historico acrescenta {@code /graphql} aos caminhos autenticados e,
+ * apenas nos profiles {@code dev} e {@code demo}, {@code /graphiql} aos publicos adicionais.
+ * Os valores padrao — {@code /api/**} autenticado e lista publica adicional vazia —
+ * reproduzem exatamente a cadeia que o agendamento sempre teve.
  *
  * <p>O padrao da cadeia e <b>negar</b>, e nao apenas exigir autenticacao: um caminho
  * novo que ninguem liberou fica inacessivel, o que e falha visivel em vez de brecha.
@@ -31,15 +35,20 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * anotacoes nunca serem avaliadas. Listar cada endpoint aqui tambem nao serve: duplicaria
  * a matriz em dois lugares que podem divergir.
  *
- * <p>A divisao e por nivel. A cadeia libera o caminho da API para quem esta autenticado e
- * <b>nega todo o resto</b>; dentro da API, quem decide o perfil e a anotacao no metodo.
- * Cada nivel tem sua propria protecao contra esquecimento: caminho novo fora da API cai
+ * <p>A divisao e por nivel. A cadeia libera os caminhos autenticados para quem tem token e
+ * <b>nega todo o resto</b>; dentro deles, quem decide o perfil e a anotacao no metodo.
+ * Cada nivel tem sua propria protecao contra esquecimento: caminho novo fora da lista cai
  * no {@code denyAll}; metodo novo sem anotacao e pego pelo teste estrutural que varre o
  * controller.
+ *
+ * <p>Quais sao esses caminhos vem de {@link CaminhosDeSeguranca}, e nao de constante fixa
+ * aqui: o historico precisa autenticar {@code /graphql} e, so em dev e demo, liberar a
+ * interface do GraphiQL. Os padroes preservam a cadeia anterior — {@code /api/**}
+ * autenticado e nenhum publico adicional —, entao quem nao configura nada nao muda.
  */
 @Configuration
 @EnableMethodSecurity
-@EnableConfigurationProperties(JwtProperties.class)
+@EnableConfigurationProperties({JwtProperties.class, CaminhosDeSeguranca.class})
 public class SegurancaAutoConfiguration {
 
     /** Caminhos abertos, conforme docs/01-arquitetura.md secao 7. */
@@ -99,20 +108,28 @@ public class SegurancaAutoConfiguration {
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             JwtAuthenticationFilter filtroJwt,
-            RespostaDeSeguranca respostas) throws Exception {
+            RespostaDeSeguranca respostas,
+            CaminhosDeSeguranca caminhos) throws Exception {
 
         return http
                 // CSRF nao se aplica: API stateless, sem cookie de sessao.
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(req -> req
-                        .requestMatchers(PUBLICOS).permitAll()
-                        // Ver ERRO_DO_CONTAINER: sem isto, falha de servidor vira 401.
-                        .requestMatchers(ERRO_DO_CONTAINER).permitAll()
-                        // Dentro da API, quem decide o perfil e o @PreAuthorize do metodo.
-                        .requestMatchers("/api/**").authenticated()
-                        // Caminho novo que ninguem liberou fica inacessivel.
-                        .anyRequest().denyAll())
+                .authorizeHttpRequests(req -> {
+                    req.requestMatchers(PUBLICOS).permitAll();
+                    // Ver ERRO_DO_CONTAINER: sem isto, falha de servidor vira 401.
+                    req.requestMatchers(ERRO_DO_CONTAINER).permitAll();
+                    // Abertos por profile, como o GraphiQL em dev e demo. Vazio por padrao,
+                    // e a lista vazia nao vira matcher: requestMatchers recusa array vazio.
+                    String[] publicosAdicionais = caminhos.publicosAdicionaisComoArray();
+                    if (publicosAdicionais.length > 0) {
+                        req.requestMatchers(publicosAdicionais).permitAll();
+                    }
+                    // Dentro deles, quem decide o perfil e o @PreAuthorize do metodo.
+                    req.requestMatchers(caminhos.autenticadosComoArray()).authenticated();
+                    // Caminho novo que ninguem liberou fica inacessivel.
+                    req.anyRequest().denyAll();
+                })
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(respostas)
                         .accessDeniedHandler(respostas))

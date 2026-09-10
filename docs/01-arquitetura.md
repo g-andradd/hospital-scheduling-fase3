@@ -112,8 +112,11 @@ hospital-scheduling-fase3/
 │       └── repository/
 └── historico-service/
     └── src/main/java/br/com/fiap/hospital/historico/
-        ├── infrastructure/messaging/ # ConsumidorTransacionalDoHistorico, ProjetorDoHistorico e HistoricoConfig
-        └── infrastructure/persistence/ # entidades e repositórios JPA
+        ├── infrastructure/messaging/   # ConsumidorTransacionalDoHistorico, ProjetorDoHistorico e HistoricoConfig
+        ├── infrastructure/persistence/ # entidades e repositórios JPA
+        ├── infrastructure/leitura/     # ConsultasDoHistorico: predicados do filtro no armazenamento
+        ├── infrastructure/correcao/    # CorrecaoDeRegistroHistorico: correção atômica com auditoria
+        └── infrastructure/graphql/     # resolvers, schema.graphqls, escalar DateTime e os dois caminhos de erro
 ```
 
 ## 4. agendamento-service — Clean Architecture
@@ -203,9 +206,52 @@ input FiltroConsulta {
 }
 ```
 
-`minhasConsultas` resolve o `pacienteId` a partir do JWT — é o caminho do paciente, que nunca informa um id de terceiro.
+`minhasConsultas` resolve o `pacienteId` a partir do JWT e **é exclusiva do perfil PACIENTE**:
+médico e enfermeiro recebem `FORBIDDEN` nela e leem o histórico por `consultasDoPaciente`,
+`consultasDoMedico` e `consulta(id:)`. A operação não aceita identificador como argumento.
 
-Autorização por resolver, com `@PreAuthorize`, e uma checagem extra de propriedade: se o perfil é `PACIENTE`, o `pacienteId` do argumento tem de bater com o do token, senão `403`.
+Autorização por resolver, com `@PreAuthorize`, e uma checagem extra de propriedade fora do corpo
+do resolver: se o perfil é `PACIENTE`, o alvo tem de bater com o do token, senão `FORBIDDEN`.
+Cada célula da matriz da §3 de `docs/02-especificacao-funcional.md` vira um caso de teste lido
+do próprio documento, e uma operação nova sem decisão de autorização quebra a varredura estrutural.
+
+**Semântica do filtro.** `TODAS` não recorta pelo relógio; `FUTURAS` seleciona `dataHora >= agora`;
+`PASSADAS`, `dataHora < agora` — um registro no instante exato pertence ao futuro. O intervalo é
+`[de, ate)`. Período, intervalo e status são combinados por AND, lista de status vazia não restringe,
+e a ordenação é `dataHora, id`, total e determinística. `agora` vem do `Clock` injetado, e todo
+predicado é aplicado pelo PostgreSQL.
+
+**Correção manual (RF-13).** `corrigirRegistroHistorico` é exclusiva de MEDICO. Corrige nome do
+paciente, nome do médico, especialidade, `dataHora`, status e observações; `consultaId` apenas
+seleciona o alvo, e não existe campo corrigível de identificador nem de autor — o autor vem do
+token. Campo ausente não corrige; nulo explícito só é aceito em `observacoes`, onde limpa o registro.
+O status precisa pertencer ao enum válido, mas a máquina de transições do agendamento **não** se
+aplica: corrigir um status errado é o caso de uso. Na mesma transação, o serviço trava a linha,
+aplica a correção, avança `atualizado_em` pelo `Clock` e grava em `consulta_evento` uma linha
+`CORRECAO_MANUAL` com autor, justificativa e valores antes/depois. Falha em qualquer ponto reverte
+tudo. A correção não grava `evento_processado` e não publica evento; `CORRECAO_MANUAL` é tipo local
+da trilha e não entra em `TipoEvento`, routing key ou topologia. Como a correção avança
+`atualizado_em`, a regra de monotonicidade do M08 continua valendo: evento anterior não a desfaz,
+evento posterior a sobrescreve.
+
+**Erros.** Duas naturezas de falha, mesma política. O que é recusado na análise e validação do
+documento — campo desconhecido, enum inexistente, tipo incompatível — é normalizado por um
+`WebGraphQlInterceptor` para `extensions.code=BAD_REQUEST`, sem que resolver algum execute. O que é
+lançado dentro do resolver passa pelo `DataFetcherExceptionResolver`: `FORBIDDEN`, `NOT_FOUND`,
+`BAD_REQUEST` de domínio e, para o inesperado, mensagem genérica sem SQL, stack trace ou nome de
+classe — a causa vai para o log do serviço. Token ausente ou inválido é recusado antes dos dois, na
+fronteira HTTP.
+
+**Segurança e GraphiQL.** O histórico não emite token: consome o filtro e o segredo de
+`shared-security`. A cadeia compartilhada passou a ler duas listas configuráveis — caminhos
+autenticados (padrão `/api/**`) e caminhos públicos adicionais (padrão vazio) —, e continua sendo
+uma única `SecurityFilterChain` com `denyAll` por omissão. O histórico acrescenta `/graphql` à
+primeira em qualquer profile; **apenas** `dev` e `demo` habilitam a interface GraphiQL e acrescentam
+`/graphiql` à segunda. No profile padrão a interface fica desabilitada e o caminho cai no `denyAll`.
+
+**Índices.** `V2` cria `consulta_historico(paciente_id, data_hora)` e `(medico_id, data_hora)`, sem
+tocar em `V1`. Não há índice por status: baixa seletividade sobre quatro valores, e o status nunca
+aparece sozinho nas consultas expostas. O plano de execução real é verificado em teste.
 
 ## 7. Segurança
 

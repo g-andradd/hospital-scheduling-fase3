@@ -3,6 +3,9 @@ package br.com.fiap.hospital.security;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.Filter;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.http.HttpServletResponse;
 import java.time.Clock;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -14,6 +17,8 @@ import org.springframework.boot.autoconfigure.web.servlet.WebMvcAutoConfiguratio
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.ExceptionTranslationFilter;
@@ -137,6 +142,90 @@ class SegurancaAutoConfigurationTest {
             assertThat(tradutor).isNotNull();
             assertThat(ctx).hasSingleBean(RespostaDeSeguranca.class);
         });
+    }
+
+    /**
+     * O padrao existe para que o agendamento nao mude quando o historico precisa de mais.
+     *
+     * <p>Se o padrao dos caminhos autenticados deixasse de ser {@code /api/**}, ou se a
+     * lista publica adicional nascesse com algo dentro, um servico que nao configurou nada
+     * passaria a expor ou a negar caminho sem que ninguem tivesse pedido — e a mudanca
+     * apareceria como falha de outro modulo, longe da causa.
+     */
+    @Test
+    @DisplayName("sem configuracao, os caminhos sao exatamente os de antes")
+    void padraoPreservaACadeiaAnterior() {
+        contexto.run(ctx -> {
+            CaminhosDeSeguranca caminhos = ctx.getBean(CaminhosDeSeguranca.class);
+
+            assertThat(caminhos.autenticados()).containsExactly("/api/**");
+            assertThat(caminhos.publicosAdicionais())
+                    .as("publico adicional nasce vazio: quem abre caminho e o servico, por profile")
+                    .isEmpty();
+            assertThat(ctx).hasSingleBean(SecurityFilterChain.class);
+        });
+    }
+
+    @Test
+    @DisplayName("o servico acrescenta caminhos sem ganhar uma segunda cadeia")
+    void servicoAcrescentaCaminhosSemSegundaCadeia() {
+        contexto.withPropertyValues(
+                        "hospital.security.caminhos.autenticados=/api/**,/graphql",
+                        "hospital.security.caminhos.publicos-adicionais=/graphiql**")
+                .run(ctx -> {
+                    CaminhosDeSeguranca caminhos = ctx.getBean(CaminhosDeSeguranca.class);
+
+                    assertThat(caminhos.autenticados()).containsExactly("/api/**", "/graphql");
+                    assertThat(caminhos.publicosAdicionais()).containsExactly("/graphiql**");
+                    assertThat(ctx)
+                            .as("caminho novo entra por configuracao; cadeia concorrente "
+                                    + "faria a ordem decidir quem atende /graphql")
+                            .hasSingleBean(SecurityFilterChain.class);
+                });
+    }
+
+    /**
+     * A recusa por omissao continua sendo o padrao.
+     *
+     * <p>Tornar a lista configuravel poderia ter trocado {@code denyAll} por
+     * "autenticado", e a diferenca so apareceria no dia em que alguem criasse um caminho
+     * novo — que passaria a responder a qualquer usuario logado em vez de nao existir.
+     */
+    @Test
+    @DisplayName("caminho fora das listas continua caindo no denyAll")
+    void caminhoForaDasListasContinuaNegado() throws Exception {
+        contexto.withPropertyValues("hospital.security.caminhos.autenticados=/api/**,/graphql")
+                .run(ctx -> {
+                    MockHttpServletRequest requisicao =
+                            new MockHttpServletRequest("GET", "/caminho-que-ninguem-liberou");
+                    MockHttpServletResponse resposta = new MockHttpServletResponse();
+
+                    filtrar(ctx.getBean(SecurityFilterChain.class), requisicao, resposta);
+
+                    assertThat(resposta.getStatus())
+                            .as("sem denyAll, caminho novo ficaria aberto a qualquer autenticado")
+                            .isEqualTo(HttpServletResponse.SC_UNAUTHORIZED);
+                });
+    }
+
+    /**
+     * Roda a requisicao pela cadeia real, do primeiro filtro ao ultimo.
+     *
+     * <p>O fim da cadeia e um alvo que registra que foi alcancado. Se a autorizacao
+     * deixasse a requisicao passar, o teste veria 200 com {@code alcancou} verdadeiro em
+     * vez de 401 — a diferenca entre "negado" e "seguiu adiante sem handler".
+     */
+    private static void filtrar(SecurityFilterChain cadeia, MockHttpServletRequest requisicao,
+                                MockHttpServletResponse resposta) throws Exception {
+        List<Filter> filtros = cadeia.getFilters();
+        FilterChain alvo = (req, res) -> { };
+        FilterChain atual = alvo;
+        for (int i = filtros.size() - 1; i >= 0; i--) {
+            Filter filtro = filtros.get(i);
+            FilterChain proxima = atual;
+            atual = (req, res) -> filtro.doFilter(req, res, proxima);
+        }
+        atual.doFilter(requisicao, resposta);
     }
 
     private static List<Class<?>> tiposDosFiltros(SecurityFilterChain cadeia) {
