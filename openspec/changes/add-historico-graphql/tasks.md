@@ -132,7 +132,7 @@ grep -o '<counter type="LINE"[^/]*/>' historico-service/target/site/jacoco/jacoc
 ```
 
 - [x] 8.5 Executar as coberturas estruturais e demonstrar sensibilidade por duas mutações isoladas, ambas no que é verificado e nunca na própria verificação: remover temporariamente o `@PreAuthorize` de um resolver e exigir falha de `CoberturaDeAutorizacaoGraphqlTest`; alterar temporariamente a tabela da documentação ou o parser para produzir contagem diferente de 5 linhas / 3 perfis / 15 células e exigir falha da asserção estrutural. Restaurar cada mutação e repetir a suíte afetada verde; manter intacta a cobertura dos cinco tipos normativos. Remover a asserção de contagem não serve como prova — apagar uma proteção produz verde falso, não evidência.
-- [ ] 8.6 Verificar a partir de clone limpo da feature branch, depois do push, em diretório temporário único criado de forma segura, e removê-lo após registrar o resultado.
+- [x] 8.6 Verificar a partir de clone limpo da feature branch, depois do push, em diretório temporário único criado de forma segura, e removê-lo após registrar o resultado.
 
 ```bash
 set -eu; TMP=$(mktemp -d); [ -d "$TMP" ] || { echo "mktemp falhou"; exit 1; }; TMP=$(cd "$TMP" && pwd -P); case "$TMP" in "$(cd "${TMPDIR:-/tmp}" && pwd -P)"/*) ;; *) echo "alvo fora do temporario: $TMP"; exit 1;; esac; trap 'rm -rf "$TMP"' EXIT INT TERM; git clone -b feature/m09-add-historico-graphql https://github.com/g-andradd/hospital-scheduling-fase3.git "$TMP/repo"; cd "$TMP/repo"; mvn -q clean verify
