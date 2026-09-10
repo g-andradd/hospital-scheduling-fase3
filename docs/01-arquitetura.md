@@ -170,7 +170,49 @@ Para o job proativo funcionar sem chamar o agendamento, o serviço mantém uma *
 - `LogNotificationSender` (padrão, `notificacao.sender=log`)
 - `SmtpNotificationSender` (`notificacao.sender=smtp`, aponta para Mailpit no compose — dá uma demo visual de e-mail chegando)
 
-Toda notificação enviada é persistida em `notificacao_enviada` para auditoria e para evitar reenvio.
+Host, porta e remetente do adaptador SMTP vêm de variáveis de ambiente; não há credencial nem
+endereço de provedor no repositório.
+
+### Consumo (M06)
+
+O consumidor AMQP é a única fronteira do serviço. Para cada envelope válido, na mesma
+transação, ele atualiza a `agenda_local`, envia a notificação reativa quando o fato a exige e
+registra o envio; só então grava o `eventId` em `evento_processado`. A ordem — efeito, depois
+marca — vem da seção 6 de `docs/03-contrato-de-eventos.md`.
+
+**Todos os cinco tipos** materializam a agenda por upsert, inclusive quando a criação daquela
+consulta ainda não foi processada: o snapshot do evento é autossuficiente, e depender da
+ordem deixaria a consulta sem linha após uma entrega fora de ordem ou um replay da DLQ. O
+upsert é condicionado a `occurredAt >= ocorrido_em`, avaliado pelo PostgreSQL sob o lock da
+linha: fato anterior é marcado como processado, mas não regride a agenda nem dispara
+notificação obsoleta. Empate de instante segue a ordem de chegada, porque o contrato não
+declara sequência por agregado. Cancelamento **atualiza** o status e nunca remove a linha — o
+lembrete do M07 precisa distinguir "cancelada" de "inexistente".
+
+Notificam apenas criação, atualização e cancelamento, conforme a tabela acima; confirmação e
+realização atualizam a agenda em silêncio. A notificação está atrelada à **aplicação** do
+fato, não ao seu recebimento.
+
+Todos os instantes que o serviço registra — `atualizado_em`, `enviado_em` e `processado_em` —
+vêm do `Clock` injetado. O instante do fato (`ocorrido_em`) vem do envelope: é o critério de
+ordenação, e derivá-lo do relógio de consumo faria um replay reordenar a agenda.
+
+O serviço não chama o agendamento: o `ConsultaPayload` completo é sua única fonte. Envelope
+inválido, versão desconhecida e falha persistente são rejeitados para
+`notificacao.consultas.dlq` após três tentativas, sem marca de processamento nem linha
+parcial. `correlationId` é restaurado no MDC durante cada tentativa e limpo no `finally`.
+
+**Garantia de entrega, dita como ela é.** O efeito **persistido** é exatamente-uma-vez por
+`eventId`: agenda, auditoria e marca commitam juntas, e a chave primária de
+`evento_processado` serializa a confirmação sob entregas concorrentes. O **envio externo** é
+ao-menos-uma-vez — o sender pode concluir e a transação reverter, e a tentativa seguinte
+reenvia; sob concorrência, ambas as entregas podem alcançar o canal antes de a chave decidir.
+Disso decorre um limite da auditoria: `notificacao_enviada` registra o que transações
+confirmadas produziram, e **não** todo envio que saiu. Eliminar essa janela exigiria um outbox
+próprio do serviço de notificação, que nenhum requisito atual pede.
+
+Rollback operacional: parar o consumidor e preservar banco, fila, DLQ, agenda e auditoria.
+Não apagar marcas processadas — uma versão corrigida retoma sem duplicar efeito.
 
 ## 6. historico-service
 
