@@ -50,6 +50,23 @@ Relatórios regenerados pelo próprio `clean verify` — o agente do JaCoCo inst
 
 As 3 linhas descobertas do `historico-service` são os construtores protegidos sem argumento exigidos pelo JPA em `ConsultaHistoricoEntity`, `ConsultaEventoEntity` e `EventoProcessadoEntity`. Nenhuma alteração de produção foi feita para elevar o percentual.
 
-## Evidência pendente
+## Entrega do PR e clone limpo (7.2b, 8.6)
 
-Permanecem pendentes apenas a matriz no corpo do PR (7.2b) e o clone limpo/archive (8.6), ambos dependentes de commit, push e aprovação do PR pelo Gabriel.
+- **PR #17** — `feature/m08-add-historico-projection` → `develop` — aprovado e mergeado. Merge commit **`06d362f`**.
+- A matriz dos 15 Scenarios com seus métodos está no corpo do PR #17, junto do resultado do gate global e dos números de cobertura. Isso conclui a task 7.2b.
+- **Clone limpo exigido pela DoD**, executado a partir de `origin/develop` em `06d362f`:
+
+  ```
+  git clone -b develop https://github.com/g-andradd/hospital-scheduling-fase3.git <tmp>
+  cd <tmp> && mvn -q clean verify
+  ```
+
+  Resultado: **BUILD verde** (exit 0), **975 testes**, zero falhas, zero erros e **zero ignorados** — `shared-contracts` 134, `shared-security` 69, `agendamento-service` 744, `notificacao-service` 1, `historico-service` 27. Os números são idênticos aos da árvore de trabalho, o que confirma que nenhum arquivo necessário ficou fora dos commits. O diretório temporário foi removido após a verificação.
+
+## Fechamento corretivo do archive
+
+A sequência prevista em `docs/05-fluxo-de-trabalho.md` §6.7 exige o archive commitado na própria feature branch **antes** do merge, para que código e spec entrem em `develop` no mesmo `--no-ff`. Isso não aconteceu: o PR #17 foi mergeado com a change ainda ativa em `openspec/changes/`. É a mesma falha registrada no M01.
+
+Como a feature branch já foi mergeada, o archive não pode mais ser retroencaixado nela. O fechamento é feito por uma **branch corretiva `chore/m08-archive`**, criada a partir de `origin/develop` em `06d362f`, contendo apenas a promoção da capability e a movimentação da change para `openspec/changes/archive/`. Nenhum código de produção é tocado.
+
+O M08 só estará integralmente encerrado quando o PR corretivo desta branch for mergeado em `develop`.
