@@ -327,13 +327,33 @@ Falha inesperada devolve mensagem genérica, sem SQL nem stack trace.
 **GraphiQL** responde em `/graphiql` apenas nos profiles `dev` e `demo`; no profile padrão a
 interface fica desabilitada e o caminho é negado pela cadeia de segurança.
 
+## Operação das notificações (M06)
+
+O `notificacao-service` consome `notificacao.consultas` e, na mesma transação, atualiza a
+`agenda_local`, envia a notificação reativa quando aplicável e grava a auditoria, marcando o
+`eventId` por último. Criação, atualização e cancelamento notificam; confirmação e realização
+apenas atualizam a agenda. Fato com `occurredAt` anterior ao já aplicado é marcado como
+processado sem regredir a agenda nem enviar aviso desatualizado.
+
+O canal de envio é escolhido por `NOTIFICACAO_SENDER`, com padrão `log` — sem configuração,
+nenhum provedor externo é contactado. O adaptador SMTP lê `SMTP_HOST`, `SMTP_PORT` e
+`NOTIFICACAO_REMETENTE` do ambiente; não há credencial no repositório.
+
+**Garantia:** o efeito persistido é exatamente-uma-vez por `eventId`. O envio externo é
+ao-menos-uma-vez: existe uma janela em que o canal recebe a mensagem e a transação reverte.
+Por isso `notificacao_enviada` registra o que transações confirmadas produziram, e não todo
+envio realizado — não use essa tabela como prova absoluta de que um paciente foi avisado.
+
+Rollback: parar o consumidor e preservar banco, fila, DLQ, agenda e auditoria; retomar após a
+correção, sem apagar marcas processadas.
+
 ## Rollback do histórico (M08)
 
 Para rollback, parar o consumidor do histórico e preservar banco, filas, DLQ, trilha e marcas de processamento. Após a correção, retomar o consumidor; não apagar evidências nem reenviar mensagens confirmadas.
 
 ## Operação dos eventos de consulta (M05)
 
-O agendamento grava consulta e envelope na mesma transação. O relay publica lotes de até 50 a cada 1s após a conclusão do lote anterior. Notificação já recebe a configuração e a fila; o histórico projeta os eventos em seu read model com idempotência transacional e trilha completa. O consumidor de negócio da notificação entra no M06.
+O agendamento grava consulta e envelope na mesma transação. O relay publica lotes de até 50 a cada 1s após a conclusão do lote anterior. O histórico projeta os eventos em seu read model com idempotência transacional e trilha completa; a notificação mantém a agenda local e avisa o paciente.
 
 Os três serviços leem RABBITMQ_HOST (localhost ao executar na máquina; rabbitmq na rede Compose), RABBITMQ_PORT, RABBITMQ_USER e RABBITMQ_PASSWORD. As propriedades de consumo exigem default-requeue-rejected=false e três tentativas totais, com pausas de 1s e 2s. A topologia é declarada na primeira conexão ao broker. Testes desabilitam o scheduler e acionam o relay explicitamente.
 

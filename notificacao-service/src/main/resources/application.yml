@@ -2,6 +2,25 @@ spring:
   application:
     name: notificacao-service
 
+  datasource:
+    url: ${NOTIFICACAO_DB_URL:jdbc:postgresql://localhost:5432/notificacao_db}
+    username: ${NOTIFICACAO_DB_USER:hospital}
+    password: ${NOTIFICACAO_DB_PASSWORD:hospital}
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+  flyway:
+    locations: classpath:db/migration
+
+  # O adaptador SMTP so e ativado por notificacao.sender=smtp. Host e porta vem do
+  # ambiente; o fallback local nao e segredo e nao aponta para provedor algum.
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}
@@ -29,3 +48,9 @@ spring:
 
 server:
   port: 8082
+
+notificacao:
+  # Canal de envio. O padrao e o adaptador de log: sem configuracao, nenhum
+  # provedor externo e contactado.
+  sender: ${NOTIFICACAO_SENDER:log}
+  remetente: ${NOTIFICACAO_REMETENTE:nao-responda@hospital.local}
