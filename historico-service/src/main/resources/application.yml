@@ -2,6 +2,19 @@ spring:
   application:
     name: historico-service
 
+  datasource:
+    url: ${HISTORICO_DB_URL:jdbc:postgresql://localhost:5432/historico_db}
+    username: ${HISTORICO_DB_USER:hospital}
+    password: ${HISTORICO_DB_PASSWORD:hospital}
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+  flyway:
+    locations: classpath:db/migration
+
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}

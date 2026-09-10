@@ -112,10 +112,8 @@ hospital-scheduling-fase3/
 │       └── repository/
 └── historico-service/
     └── src/main/java/br/com/fiap/hospital/historico/
-        ├── consumer/                # projeta eventos no read model
-        ├── graphql/                 # controllers @QueryMapping, schema.graphqls
-        ├── model/
-        └── repository/
+        ├── infrastructure/messaging/ # ConsumidorTransacionalDoHistorico, ProjetorDoHistorico e HistoricoConfig
+        └── infrastructure/persistence/ # entidades e repositórios JPA
 ```
 
 ## 4. agendamento-service — Clean Architecture
@@ -174,6 +172,20 @@ Toda notificação enviada é persistida em `notificacao_enviada` para auditoria
 ## 6. historico-service
 
 Read model puro. Não aceita escrita por HTTP exceto a correção de registro pelo médico (RF-13).
+
+O consumidor AMQP é a única fronteira de projeção. Para cada envelope válido, na mesma
+transação, ele atualiza `consulta_historico` por `INSERT ... ON CONFLICT DO UPDATE ... WHERE`
+e grava a trilha imutável em `consulta_evento`; só então registra `eventId` em
+`evento_processado`. A condição do upsert é avaliada pelo PostgreSQL sob o lock da linha:
+evento antigo entra na trilha, mas não regride o snapshot. Empates de `occurredAt` respeitam a
+ordem de chegada, porque o contrato não declara sequência por agregado.
+
+O histórico não chama o agendamento: o `ConsultaPayload` completo é sua única fonte. O
+consumidor aplica retry contratual de três tentativas; envelope inválido, versão desconhecida e
+falha persistente são rejeitados para `historico.consultas.dlq`, sem marca de processamento nem
+linha parcial na trilha.
+
+Rollback operacional: parar o consumidor e preservar banco, filas, DLQ, trilha e marcas; corrigir e retomar, sem apagar a auditoria.
 
 ```graphql
 type Query {

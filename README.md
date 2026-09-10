@@ -278,16 +278,20 @@ Cada uma das 15 changes do roadmap segue o ciclo `/opsx:propose` → revisão hu
 | Release | Fecha após | Entrega |
 |---|---|---|
 | `v0.1.0` | M04 | Agendamento seguro ponta a ponta |
-| `v0.2.0` | M09 | Mensageria, notificações e histórico GraphQL |
+| `v0.2.0` | M07 | Mensageria, notificações, histórico e lembrete D-1 |
 | `v1.0.0` | M14 | Entrega do Tech Challenge |
 
 ## Licença
 
 MIT
 
+## Rollback do histórico (M08)
+
+Para rollback, parar o consumidor do histórico e preservar banco, filas, DLQ, trilha e marcas de processamento. Após a correção, retomar o consumidor; não apagar evidências nem reenviar mensagens confirmadas.
+
 ## Operação dos eventos de consulta (M05)
 
-O agendamento grava consulta e envelope na mesma transação. O relay publica lotes de até 50 a cada 1s após a conclusão do lote anterior. Notificação e histórico já recebem a configuração e as filas; seus consumidores de negócio entram em M06/M08.
+O agendamento grava consulta e envelope na mesma transação. O relay publica lotes de até 50 a cada 1s após a conclusão do lote anterior. Notificação já recebe a configuração e a fila; o histórico projeta os eventos em seu read model com idempotência transacional e trilha completa. O consumidor de negócio da notificação entra no M06.
 
 Os três serviços leem RABBITMQ_HOST (localhost ao executar na máquina; rabbitmq na rede Compose), RABBITMQ_PORT, RABBITMQ_USER e RABBITMQ_PASSWORD. As propriedades de consumo exigem default-requeue-rejected=false e três tentativas totais, com pausas de 1s e 2s. A topologia é declarada na primeira conexão ao broker. Testes desabilitam o scheduler e acionam o relay explicitamente.
 
