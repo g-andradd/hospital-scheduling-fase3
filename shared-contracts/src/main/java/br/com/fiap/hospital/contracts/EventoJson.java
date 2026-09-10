@@ -31,6 +31,20 @@ public class EventoJson {
         }
     }
 
+    /**
+     * Serializa somente o snapshot do contrato sem deixar o mapeador JSON de uma
+     * persistência normalizar seu deslocamento. O envelope completo continua sendo
+     * validado antes da extração.
+     */
+    public String escreverPayload(EventoEnvelope<ConsultaPayload> evento) {
+        try {
+            JsonNode envelope = mapper.readTree(escrever(evento));
+            return mapper.writeValueAsString(envelope.get("payload"));
+        } catch (JsonProcessingException e) {
+            throw new MensagemInvalidaException(JSON, "payload");
+        }
+    }
+
     public EventoEnvelope<ConsultaPayload> ler(String json) {
         try {
             JsonNode n = mapper.readTree(json);
@@ -120,4 +134,3 @@ public class EventoJson {
         if(!condicao) throw new MensagemInvalidaException(motivo,campo);
     }
 }
-
