@@ -1,5 +1,9 @@
 # operacao-do-ambiente
 
+## Purpose
+
+Define as garantias de build reprodutível, infraestrutura local isolada e separação entre testes unitários e de integração necessárias para executar e verificar o monorepo de forma consistente.
+
 ## Requirements
 
 ### Requirement: Build reprodutível do monorepo
