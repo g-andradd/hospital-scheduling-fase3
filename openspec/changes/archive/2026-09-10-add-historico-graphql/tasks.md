@@ -139,19 +139,19 @@ set -eu; TMP=$(mktemp -d); [ -d "$TMP" ] || { echo "mktemp falhou"; exit 1; }; T
 ```
 
 - [x] 8.7 Levar ao corpo do PR a matriz dos 40 Scenarios com seus métodos, a contagem de testes por módulo, a cobertura e o resultado do clone limpo.
-- [ ] 8.8 **Depois da aprovação do PR e antes do merge**, executar `/opsx:archive add-historico-graphql` na própria feature branch — pelo workflow, não pelo comando CLI cru, para que a promoção da spec seja verificada e não apenas o move do diretório.
+- [x] 8.8 **Depois da aprovação do PR e antes do merge**, executar `/opsx:archive add-historico-graphql` na própria feature branch — pelo workflow, não pelo comando CLI cru, para que a promoção da spec seja verificada e não apenas o move do diretório.
 
 ```
 /opsx:archive add-historico-graphql
 ```
 
-- [ ] 8.9 Confirmar o resultado do archive: `openspec/changes/add-historico-graphql` deixou de existir; a change está em `openspec/changes/archive/<data>-add-historico-graphql/`; a delta foi promovida para `openspec/specs/historico-de-consultas/spec.md` preservando os Requirements do M08; nenhuma outra capability foi alterada; e `openspec list` não mostra change ativa inesperada.
+- [x] 8.9 Confirmar o resultado do archive: `openspec/changes/add-historico-graphql` deixou de existir; a change está em `openspec/changes/archive/<data>-add-historico-graphql/`; a delta foi promovida para `openspec/specs/historico-de-consultas/spec.md` preservando os Requirements do M08; nenhuma outra capability foi alterada; e `openspec list` não mostra change ativa inesperada.
 
 ```bash
 openspec validate --all --strict && openspec list
 ```
 
-- [ ] 8.10 Conferir no diff do PR que código, archive e spec promovida estão na mesma feature branch, entregar ao Gabriel o comando do commit de archive e exigir o push antes do merge — diferentemente do M08, o archive não pode ficar para uma branch corretiva.
+- [x] 8.10 Conferir no diff do PR que código, archive e spec promovida estão na mesma feature branch, entregar ao Gabriel o comando do commit de archive e exigir o push antes do merge — diferentemente do M08, o archive não pode ficar para uma branch corretiva.
 
 ```bash
 git add -A openspec && git commit -m "chore(openspec): arquiva add-historico-graphql"
