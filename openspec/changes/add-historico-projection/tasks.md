@@ -65,9 +65,9 @@
 
 ## 8. Verificação
 
-- [ ] 8.1 Executar `openspec validate add-historico-projection --strict` e `openspec status --change add-historico-projection`; conferir capability, 15 Scenarios, matriz e quatro artefatos completos.
-- [ ] 8.2 Executar `mvn -q clean verify` na raiz com PostgreSQL 16 e RabbitMQ 3.13 reais, sem testes ignorados; registrar contagem por módulo e resultado final.
-- [ ] 8.3 Conferir JaCoCo do `historico-service` e cobertura global mínima de 85%, registrando números reais sem antecipar agregação do M10.
+- [x] 8.1 Executar `openspec validate add-historico-projection --strict` e `openspec status --change add-historico-projection`; conferir capability, 15 Scenarios, matriz e quatro artefatos completos.
+- [x] 8.2 Executar `mvn -q clean verify` na raiz com PostgreSQL 16 e RabbitMQ 3.13 reais, sem testes ignorados; registrar contagem por módulo e resultado final.
+- [x] 8.3 Conferir JaCoCo do `historico-service` e cobertura global mínima de 85%, registrando números reais sem antecipar agregação do M10.
 - [x] 8.4 Executar as coberturas estruturais de listener idempotente e ausência de cliente HTTP; conferir schema/JSONB, configuração efetiva de retry e inexistência de índices secundários antecipados.
 - [x] 8.5 Demonstrar as três mutações de D6 — omitir a marca final, tornar o upsert incondicional e engolir a rejeição — e repetir as suítes afetadas após restaurar cada alteração.
 - [ ] 8.6 Entregar ao Gabriel comandos para commit/push e clone limpo da feature; registrar `mvn -q clean verify` do clone antes da aprovação. Após aprovação, promover e arquivar a change nesta mesma branch, entregar o commit do archive e exigir push antes do merge do único PR.
