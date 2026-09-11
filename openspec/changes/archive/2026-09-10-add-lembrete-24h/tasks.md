@@ -203,19 +203,19 @@ grep -o '<counter type="LINE"[^/]*/>' notificacao-service/target/site/jacoco/jac
 set -eu; TMP=$(mktemp -d); [ -d "$TMP" ] || { echo "mktemp falhou"; exit 1; }; TMP=$(cd "$TMP" && pwd -P); case "$TMP" in "$(cd "${TMPDIR:-/tmp}" && pwd -P)"/*) ;; *) echo "alvo fora do temporario: $TMP"; exit 1;; esac; trap 'rm -rf "$TMP"' EXIT INT TERM; git clone -b feature/m07-add-lembrete-24h https://github.com/g-andradd/hospital-scheduling-fase3.git "$TMP/repo"; cd "$TMP/repo"; mvn -q clean verify
 ```
 
-- [ ] 10.7 Levar ao corpo do PR:
+- [x] 10.7 Levar ao corpo do PR:
   - a matriz dos 30 Scenarios com seus métodos e a tabela de autorização do notificação com seus testes por célula;
   - a contagem de testes por módulo e a cobertura;
   - o SQL capturado e o plano medido;
   - as mutações e o resultado do clone limpo;
   - a declaração explícita da garantia de entrega externa.
-- [ ] 10.8 **Depois da aprovação do PR e antes do merge**, executar o archive na própria feature branch, pelo workflow e não pelo CLI cru, para que a promoção seja verificada.
+- [x] 10.8 **Depois da aprovação do PR e antes do merge**, executar o archive na própria feature branch, pelo workflow e não pelo CLI cru, para que a promoção seja verificada.
 
 ```
 /opsx:archive add-lembrete-24h
 ```
 
-- [ ] 10.9 Confirmar o resultado do archive com uma verificação que **falha** em qualquer desvio. Ela exige:
+- [x] 10.9 Confirmar o resultado do archive com uma verificação que **falha** em qualquer desvio. Ela exige:
   - a change arquivada em `openspec/changes/archive/<data>-add-lembrete-24h/` e ausente de `openspec/changes/`;
   - nenhuma change ativa: nenhum diretório diretamente sob `openspec/changes/` além de `archive`;
   - `openspec/specs/notificacoes-ao-paciente/spec.md` com 15 Requirements e 56 Scenarios — 26 do M06 e 30 do M07 — e um único `## Purpose`;
