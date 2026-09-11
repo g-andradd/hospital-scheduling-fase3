@@ -19,14 +19,18 @@
 
     <dependencies>
         <!--
-            Prova, no reactor, que os servicos resolvem o modulo compartilhado.
-            shared-security fica de fora ate o M04: trazer o starter de seguranca agora
-            ativaria o auto-config do Spring Security e fecharia os endpoints que o M03
-            especifica como abertos.
+            shared-contracts traz envelope, payload e topologia do M05. shared-security traz
+            a cadeia de filtros compartilhada: desde o M07 o servico expoe o disparo manual do
+            lembrete D-1, protegido pelo mesmo JWT que o agendamento emite.
         -->
         <dependency>
             <groupId>br.com.fiap.hospital</groupId>
             <artifactId>shared-contracts</artifactId>
+            <version>${revision}</version>
+        </dependency>
+        <dependency>
+            <groupId>br.com.fiap.hospital</groupId>
+            <artifactId>shared-security</artifactId>
             <version>${revision}</version>
         </dependency>
 

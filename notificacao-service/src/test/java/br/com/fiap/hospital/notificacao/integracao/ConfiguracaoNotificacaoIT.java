@@ -84,4 +84,32 @@ class ConfiguracaoNotificacaoIT extends NotificacaoITBase {
         assertThat(adaptadorAtivo).isInstanceOf(LogNotificationSender.class);
         assertThat(sender.canal()).isEqualTo("LOG");
     }
+
+    @Test
+    @DisplayName("os testes sobem no profile test, com o agendador do lembrete desligado")
+    void profileTestComAgendadorDesligado() {
+        assertThat(ambiente.getActiveProfiles())
+                .as("vem de src/test/resources, e vale para toda suite do modulo")
+                .containsExactly("test");
+        assertThat(ambiente.getProperty("notificacao.lembrete.agendador-habilitado")).isEqualTo("false");
+        assertThat(ambiente.getProperty("notificacao.lembrete.cron"))
+                .as("o padrao do application.yml: inicio de cada hora")
+                .isEqualTo("0 0 * * * *");
+    }
+
+    @Test
+    @DisplayName("a cadeia compartilhada autentica /internal/** e valida o token do agendamento")
+    void segurancaConfiguradaParaOEndpointInterno() {
+        var caminhos = contexto.getBean(br.com.fiap.hospital.security.CaminhosDeSeguranca.class);
+
+        assertThat(caminhos.autenticados())
+                .as("substitui o padrao /api/**: o servico nao tem /api")
+                .containsExactly("/internal/**");
+        assertThat(caminhos.publicosAdicionais()).isEmpty();
+        assertThat(propriedadesJwt.expiracao()).isEqualTo(java.time.Duration.ofHours(8));
+        assertThat(propriedadesJwt.emissor()).isEqualTo("hospital-agendamento");
+        assertThat(propriedadesJwt.secret())
+                .as("o segredo dos testes vem de src/test/resources; src/main nao tem fallback")
+                .isEqualTo("segredo-de-teste-do-notificacao-com-mais-de-32-bytes");
+    }
 }

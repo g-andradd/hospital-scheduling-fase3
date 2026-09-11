@@ -96,6 +96,12 @@ Consolidada a partir do enunciado §1 e §2 (ver ADR-004 para a resolução da a
 | `consulta(id:)` | ✅ | ✅ | ✅ (só se for sua) |
 | `corrigirRegistroHistorico` (mutation) | ✅ | ❌ 403 | ❌ 403 |
 
+### notificacao-service — REST interno
+
+| Endpoint | Método | MEDICO | ENFERMEIRO | PACIENTE |
+|---|---|:---:|:---:|:---:|
+| `/internal/lembretes/executar` | POST | ✅ | ✅ | ❌ 403 |
+
 **Teste obrigatório:** para cada célula ✅/❌ desta matriz existe um teste de integração. É o item de segurança que a banca mais consegue verificar objetivamente.
 
 ## 4. Modelo de domínio
@@ -127,6 +133,8 @@ agenda_local        (consulta_id PK, paciente_id, paciente_nome, paciente_email,
 notificacao_enviada (id, consulta_id, tipo, destinatario, canal, enviado_em, conteudo)
 evento_processado   (event_id PK, processado_em)
 ```
+
+Índices (M07): `notificacao_enviada(consulta_id) WHERE tipo = 'LEMBRETE_D1'`, único e parcial — no máximo um lembrete D-1 por consulta, sem restringir as notificações reativas, que repetem tipo —, e `agenda_local(status, data_hora)`, que sustenta a varredura D-1. `LEMBRETE_D1` é tipo local do registro de envios, não evento de integração.
 
 ### historico_db
 

@@ -26,7 +26,12 @@ final class MatrizDeAutorizacaoGraphql {
             Path.of("..", "docs", "02-especificacao-funcional.md");
 
     private static final String INICIO = "### historico-service — GraphQL";
-    private static final String FIM = "**Teste obrigatório:**";
+    /**
+     * A tabela GraphQL termina onde comeca a do notificacao, acrescentada no M07. Terminar na
+     * nota de teste obrigatorio faria esta leitura engolir a linha REST do lembrete como se
+     * fosse uma operacao GraphQL.
+     */
+    private static final String FIM = "### notificacao-service — REST interno";
 
     /** O que a celula diz que deve acontecer. */
     enum Expectativa {

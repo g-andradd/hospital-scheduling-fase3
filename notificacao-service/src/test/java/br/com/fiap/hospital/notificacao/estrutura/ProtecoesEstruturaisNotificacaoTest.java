@@ -132,9 +132,134 @@ class ProtecoesEstruturaisNotificacaoTest {
 
         assertThat(codigo).doesNotContain("Instant.now()", "LocalDateTime.now()",
                 "OffsetDateTime.now()", "System.currentTimeMillis()");
-        assertThat(lerArvore(RAIZ.resolve("src/main/java")))
+        assertThat(leiturasDoRelogioDoBanco(codigo + lerArvore(RAIZ.resolve("src/main/resources"))))
                 .as("e o SQL tambem nao pode carimbar a hora do banco")
-                .doesNotContain("now()," , "now())");
+                .isEmpty();
+    }
+
+    /**
+     * Qualquer forma do relogio do banco, em qualquer posicao.
+     *
+     * <p>A versao do M06 so pegava {@code now(),} e {@code now())}: um
+     * {@code data_hora > now()} seguido de quebra de linha passaria — exatamente o formato de
+     * um recorte de janela. Com o relogio do banco, o teste de relogio fixo mediria uma janela
+     * e a producao aplicaria outra.
+     */
+    private static final java.util.regex.Pattern RELOGIO_DO_BANCO = java.util.regex.Pattern.compile(
+            "(?i)\\bnow\\(\\)|\\bcurrent_timestamp\\b|\\blocaltimestamp\\b"
+                    + "|\\bclock_timestamp\\(\\)|\\bstatement_timestamp\\(\\)");
+
+    private static List<String> leiturasDoRelogioDoBanco(String texto) {
+        List<String> achados = new ArrayList<>();
+        var leituras = RELOGIO_DO_BANCO.matcher(texto);
+        while (leituras.find()) achados.add(leituras.group());
+        return achados;
+    }
+
+    @Test
+    @DisplayName("a guarda de relogio do banco recusa toda forma e aceita parametro")
+    void guardaDeRelogioDoBancoDistingueLeituraDeParametro() {
+        for (String leitura : List.of("WHERE data_hora > now()\n  AND status = ?",
+                "DEFAULT CURRENT_TIMESTAMP", "SELECT localtimestamp", "clock_timestamp()",
+                "Statement_Timestamp()", "Now()")) {
+            assertThat(leiturasDoRelogioDoBanco(leitura)).as("precisa recusar: %s", leitura).isNotEmpty();
+        }
+        for (String aceito : List.of("WHERE data_hora > ? AND data_hora <= ?",
+                "OffsetDateTime.ofInstant(clock.instant(), zona)", "unknown()",
+                "current_timestamps_arquivados")) {
+            assertThat(leiturasDoRelogioDoBanco(aceito)).as("precisa aceitar: %s", aceito).isEmpty();
+        }
+    }
+
+    // --- lembrete D-1 -------------------------------------------------------------------
+
+    /**
+     * Uma transacao por candidato, e a reserva antes do envio.
+     *
+     * <p>As tres coisas se protegem juntas. Uma transacao para a execucao inteira faria a
+     * falha do decimo candidato reverter os nove ja entregues. Enviar antes de reservar
+     * deixaria duas execucoes concorrentes acionarem o canal antes de a chave decidir. E a
+     * sequencia e lida do codigo-fonte porque o teste de concorrencia depende de o
+     * escalonamento produzir a corrida; esta verificacao nao depende de nada.
+     */
+    @Test
+    @DisplayName("o lembrete reserva antes de enviar, numa transacao por candidato")
+    void lembreteReservaAntesDeEnviarNumaTransacaoPorCandidato() throws Exception {
+        Method lembrar = br.com.fiap.hospital.notificacao.lembrete.RegistradorDeLembrete.class
+                .getMethod("lembrar", br.com.fiap.hospital.notificacao.lembrete.CandidatoAoLembrete.class);
+        Transactional tx = MergedAnnotations.from(lembrar, MergedAnnotations.SearchStrategy.TYPE_HIERARCHY)
+                .get(Transactional.class).synthesize();
+        assertThat(tx.propagation()).isEqualTo(Propagation.REQUIRED);
+        assertThat(tx.readOnly()).isFalse();
+
+        Class<?> laco = br.com.fiap.hospital.notificacao.lembrete.ServicoDeLembretes.class;
+        assertThat(MergedAnnotations.from(laco, MergedAnnotations.SearchStrategy.TYPE_HIERARCHY)
+                .isPresent(Transactional.class))
+                .as("o laco nao pode ser transacional: uma falha reverteria os lembretes ja entregues")
+                .isFalse();
+        for (Method metodo : laco.getDeclaredMethods()) {
+            assertThat(MergedAnnotations.from(metodo, MergedAnnotations.SearchStrategy.TYPE_HIERARCHY)
+                    .isPresent(Transactional.class))
+                    .as("%s nao pode ser transacional", metodo.getName())
+                    .isFalse();
+        }
+
+        String fonte = Files.readString(RAIZ.resolve(
+                "src/main/java/br/com/fiap/hospital/notificacao/lembrete/RegistradorDeLembrete.java"));
+        int reserva = fonte.indexOf("jdbc.update(RESERVA");
+        int envio = fonte.indexOf("sender.enviar(mensagem)");
+        assertThat(reserva).as("a reserva precisa existir").isNotNegative();
+        assertThat(envio).as("o envio precisa existir").isNotNegative();
+        assertThat(reserva)
+                .as("enviar antes de reservar deixa duas execucoes acionarem o canal")
+                .isLessThan(envio);
+    }
+
+    @Test
+    @DisplayName("LEMBRETE_D1 fica fora do contrato de eventos")
+    void lembreteForaDoContratoDeEventos() throws IOException {
+        assertThat(Arrays.stream(br.com.fiap.hospital.contracts.TipoEvento.values()).map(Enum::name))
+                .containsExactly("CONSULTA_CRIADA", "CONSULTA_ATUALIZADA", "CONSULTA_CONFIRMADA",
+                        "CONSULTA_CANCELADA", "CONSULTA_REALIZADA");
+
+        Path contratos = RAIZ.toString().isEmpty()
+                ? Path.of("..", "shared-contracts", "src", "main")
+                : Path.of("shared-contracts", "src", "main");
+        String textoDosContratos = lerArvore(contratos);
+        assertThat(textoDosContratos)
+                .as("a leitura precisa ter achado o modulo, senao a proxima asercao e vazia")
+                .contains("enum TipoEvento");
+        assertThat(textoDosContratos).doesNotContain("LEMBRETE");
+
+        assertThat(lerArvore(RAIZ.resolve("src/main/java/br/com/fiap/hospital/notificacao/lembrete")))
+                .as("o lembrete e efeito interno: nao publica nem conhece o contrato de mensageria")
+                .isNotEmpty()
+                .doesNotContain("org.springframework.amqp", "RabbitTemplate", "AmqpTemplate",
+                        "br.com.fiap.hospital.contracts");
+    }
+
+    /**
+     * Uma cadeia so, a compartilhada.
+     *
+     * <p>Uma segunda {@code SecurityFilterChain} faria a ordem de registro decidir quem
+     * atende {@code /internal/**}, e o {@code denyAll} por omissao deixaria de ser garantia.
+     */
+    @Test
+    @DisplayName("o modulo nao declara cadeia de seguranca propria")
+    void naoDeclaraCadeiaDeSegurancaPropria() {
+        for (Class<?> tipo : classesDeProducao()) {
+            assertThat(MergedAnnotations.from(tipo, MergedAnnotations.SearchStrategy.TYPE_HIERARCHY)
+                    .isPresent(org.springframework.security.config.annotation.web.configuration
+                            .EnableWebSecurity.class))
+                    .as("%s nao pode habilitar seguranca propria", tipo.getName())
+                    .isFalse();
+            for (Method metodo : tipo.getDeclaredMethods()) {
+                assertThat(org.springframework.security.web.SecurityFilterChain.class
+                        .isAssignableFrom(metodo.getReturnType()))
+                        .as("%s#%s nao pode declarar cadeia", tipo.getSimpleName(), metodo.getName())
+                        .isFalse();
+            }
+        }
     }
 
     // --- segredo ------------------------------------------------------------------------
