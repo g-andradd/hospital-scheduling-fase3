@@ -197,7 +197,7 @@ grep -o '<counter type="LINE"[^/]*/>' notificacao-service/target/site/jacoco/jac
     - agendamento-service: 744
     - notificacao-service: 113
     - historico-service: 119
-- [ ] 10.6 Verificar a partir de clone limpo da feature branch, depois do push, em diretório temporário único, removido após registrar o resultado.
+- [x] 10.6 Verificar a partir de clone limpo da feature branch, depois do push, em diretório temporário único, removido após registrar o resultado.
 
 ```bash
 set -eu; TMP=$(mktemp -d); [ -d "$TMP" ] || { echo "mktemp falhou"; exit 1; }; TMP=$(cd "$TMP" && pwd -P); case "$TMP" in "$(cd "${TMPDIR:-/tmp}" && pwd -P)"/*) ;; *) echo "alvo fora do temporario: $TMP"; exit 1;; esac; trap 'rm -rf "$TMP"' EXIT INT TERM; git clone -b feature/m07-add-lembrete-24h https://github.com/g-andradd/hospital-scheduling-fase3.git "$TMP/repo"; cd "$TMP/repo"; mvn -q clean verify
