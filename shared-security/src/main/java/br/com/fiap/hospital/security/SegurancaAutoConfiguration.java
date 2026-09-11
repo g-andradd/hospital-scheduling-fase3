@@ -17,12 +17,15 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 /**
  * Cadeia de filtros compartilhada pelos servicos.
  *
- * <p>Dois servicos a consomem: o agendamento, com sua API REST, e o historico, que expoe
- * {@code /graphql} desde o M09. A notificacao continua sem endpoint e sem esta dependencia.
+ * <p>Os tres servicos a consomem: o agendamento, com sua API REST; o historico, que expoe
+ * {@code /graphql} desde o M09; e a notificacao, que expoe o disparo manual do lembrete D-1
+ * em {@code /internal/lembretes/executar} desde o M07.
  *
- * <p>O que permitiu o segundo consumidor sem duplicar cadeia foram as duas listas
+ * <p>O que permitiu os consumidores novos sem duplicar cadeia foram as duas listas
  * configuraveis abaixo. O historico acrescenta {@code /graphql} aos caminhos autenticados e,
  * apenas nos profiles {@code dev} e {@code demo}, {@code /graphiql} aos publicos adicionais.
+ * A notificacao substitui a lista autenticada por {@code /internal/**}, porque nao tem
+ * {@code /api}.
  * Os valores padrao — {@code /api/**} autenticado e lista publica adicional vazia —
  * reproduzem exatamente a cadeia que o agendamento sempre teve.
  *
