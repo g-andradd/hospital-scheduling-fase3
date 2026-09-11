@@ -2,56 +2,56 @@
 
 ## 1. Build e configuração
 
-- [ ] 1.1 Adicionar `shared-security` às dependências do `notificacao-service` e corrigir o comentário obsoleto do POM, que ainda diz que o módulo fica de fora "até o M04"; verificar resolução com `mvn -q -pl notificacao-service -am test-compile`.
-- [ ] 1.2 Configurar no `application.yml`: `hospital.jwt.secret: ${JWT_SECRET}` **sem fallback**, expiração `PT8H` e emissor `hospital-agendamento`; `hospital.security.caminhos.autenticados: /internal/**`; `notificacao.lembrete.cron` (`${NOTIFICACAO_LEMBRETE_CRON:0 0 * * * *}`) e `notificacao.lembrete.agendador-habilitado` (`${NOTIFICACAO_LEMBRETE_AGENDADOR_HABILITADO:true}`); e um documento `on-profile: test` com `agendador-habilitado: false` (D6, D7). Verificar os valores efetivos em `ConfiguracaoNotificacaoIT`, e que `ProtecoesEstruturaisNotificacaoTest#nenhumValorSensivelLiteral` continua verde **sem alteração da guarda**.
-- [ ] 1.3 Criar `src/test/resources/application.properties` com `spring.profiles.active=test` e um segredo JWT de teste de pelo menos 32 bytes. Usar `.properties`, e não `application.yml`, para não sombrear a configuração de produção. Verificar em `ConfiguracaoNotificacaoIT` que o profile `test` está ativo no contexto da base, e que `SelecaoDeSenderIT` e as suítes do M06 sobem nele.
-- [ ] 1.4 Estender `NotificacaoITBase` com `@AutoConfigureMockMvc`, os `@SpyBean` do caso de uso e da operação por candidato, o gravador de SQL (5.1) e a emissão de tokens por perfil — tudo **na base**, nunca numa suíte (D9). Verificar que `ConfiguracaoNotificacaoIT#existeExatamenteUmListener` continua verde e que as suítes do M06 compartilham um único contexto.
+- [x] 1.1 Adicionar `shared-security` às dependências do `notificacao-service` e corrigir o comentário obsoleto do POM, que ainda diz que o módulo fica de fora "até o M04"; verificar resolução com `mvn -q -pl notificacao-service -am test-compile`.
+- [x] 1.2 Configurar no `application.yml`: `hospital.jwt.secret: ${JWT_SECRET}` **sem fallback**, expiração `PT8H` e emissor `hospital-agendamento`; `hospital.security.caminhos.autenticados: /internal/**`; `notificacao.lembrete.cron` (`${NOTIFICACAO_LEMBRETE_CRON:0 0 * * * *}`) e `notificacao.lembrete.agendador-habilitado` (`${NOTIFICACAO_LEMBRETE_AGENDADOR_HABILITADO:true}`); e um documento `on-profile: test` com `agendador-habilitado: false` (D6, D7). Verificar os valores efetivos em `ConfiguracaoNotificacaoIT`, e que `ProtecoesEstruturaisNotificacaoTest#nenhumValorSensivelLiteral` continua verde **sem alteração da guarda**.
+- [x] 1.3 Criar `src/test/resources/application.properties` com `spring.profiles.active=test` e um segredo JWT de teste de pelo menos 32 bytes. Usar `.properties`, e não `application.yml`, para não sombrear a configuração de produção. Verificar em `ConfiguracaoNotificacaoIT` que o profile `test` está ativo no contexto da base, e que `SelecaoDeSenderIT` e as suítes do M06 sobem nele.
+- [x] 1.4 Estender `NotificacaoITBase` com `@AutoConfigureMockMvc`, os `@SpyBean` do caso de uso e da operação por candidato, o gravador de SQL (5.1) e a emissão de tokens por perfil — tudo **na base**, nunca numa suíte (D9). Verificar que `ConfiguracaoNotificacaoIT#existeExatamenteUmListener` continua verde e que as suítes do M06 compartilham um único contexto.
 
 ## 2. Persistência
 
-- [ ] 2.1 Criar `V2__cria_indices_do_lembrete.sql` com `uq_notificacao_enviada_lembrete_d1` — único e parcial, em `(consulta_id) WHERE tipo = 'LEMBRETE_D1'` — e `idx_agenda_local_status_data_hora` em `(status, data_hora)`, sem tocar `V1` (D2). Verificar em `IndicesDoLembreteIT` nomes, colunas e predicado parcial lidos de `pg_indexes`, reaplicação num schema isolado sem nada executado e `ddl-auto=validate`.
-- [ ] 2.2 Evoluir as asserções estruturais de `SchemaNotificacaoIT` que descreviam o estado do M06, **sem afrouxá-las**: exatamente as PKs de `V1` mais os dois índices de `V2`; dois scripts aplicados; `V1` sem `CREATE INDEX` no arquivo; e exatamente o controller do lembrete como endpoint do serviço. Verificar a suíte verde.
-- [ ] 2.3 Provar em `IdempotenciaDoLembreteIT#armazenamentoRecusaSegundoLembreteDaMesmaConsulta` que uma segunda gravação direta de `LEMBRETE_D1` para a mesma consulta é recusada pelo PostgreSQL, e que dois registros `CONSULTA_ATUALIZADA` da mesma consulta continuam aceitos.
+- [x] 2.1 Criar `V2__cria_indices_do_lembrete.sql` com `uq_notificacao_enviada_lembrete_d1` — único e parcial, em `(consulta_id) WHERE tipo = 'LEMBRETE_D1'` — e `idx_agenda_local_status_data_hora` em `(status, data_hora)`, sem tocar `V1` (D2). Verificar em `IndicesDoLembreteIT` nomes, colunas e predicado parcial lidos de `pg_indexes`, reaplicação num schema isolado sem nada executado e `ddl-auto=validate`.
+- [x] 2.2 Evoluir as asserções estruturais de `SchemaNotificacaoIT` que descreviam o estado do M06, **sem afrouxá-las**: exatamente as PKs de `V1` mais os dois índices de `V2`; dois scripts aplicados; `V1` sem `CREATE INDEX` no arquivo; e exatamente o controller do lembrete como endpoint do serviço. Verificar a suíte verde.
+- [x] 2.3 Provar em `IdempotenciaDoLembreteIT#armazenamentoRecusaSegundoLembreteDaMesmaConsulta` que uma segunda gravação direta de `LEMBRETE_D1` para a mesma consulta é recusada pelo PostgreSQL, e que dois registros `CONSULTA_ATUALIZADA` da mesma consulta continuam aceitos.
 
 ## 3. Caso de uso do lembrete
 
-- [ ] 3.1 Implementar o comando de candidatos de D3 como constante do código de produção, emitido por `JdbcTemplate`, com `agora` e `agora + 24h` do `Clock` injetado como parâmetros e ordenação `data_hora, consulta_id`. Verificar as bordas em `JanelaDoLembreteIT` com o `Clock` fixo da base: 23h59 recebe, exatamente 24h recebe, 24h01 não recebe, e o instante da execução ou um minuto antes não recebe.
-- [ ] 3.2 Restringir o comando a `AGENDADA` e `CONFIRMADA`; verificar em `JanelaDoLembreteIT` que ambas são lembradas e que `CANCELADA` e `REALIZADA` dentro da janela não recebem envio nem registro.
-- [ ] 3.3 Implementar a operação por candidato num bean próprio com `@Transactional(propagation = REQUIRED)`: reserva por `INSERT ... ON CONFLICT (consulta_id) WHERE tipo = 'LEMBRETE_D1' DO NOTHING`, encerramento sem envio quando nenhuma linha é afetada, e envio depois da reserva (D4). O laço que percorre os candidatos **não** é transacional. Verificar com cobertura estrutural em `ProtecoesEstruturaisNotificacaoTest`: fronteira transacional do candidato, ausência de `@Transactional` no laço, e a reserva antes do envio na sequência do código-fonte.
-- [ ] 3.4 Acrescentar o texto do lembrete a `TemplatesDeNotificacao` — português, assunto "Lembrete de consulta", data e hora formatadas em `America/Sao_Paulo` — sem alterar `notifica(TipoEvento)` nem o mapa de eventos (D8). Verificar em `RegistroDoLembreteIT#conteudoInformaMedicoEHorarioLocal` que 12/09/2026 14:30 UTC aparece como 12/09/2026 11:30, e que `NotificacaoReativaIT` continua verde.
-- [ ] 3.5 Gravar o registro com tipo `LEMBRETE_D1`, e-mail do paciente como destinatário, `sender.canal()`, `enviado_em` do `Clock` e o mesmo conteúdo entregue ao canal. Verificar em `RegistroDoLembreteIT#lembreteConfirmadoFicaRegistradoComoFoiEntregue`, comparando o registro com o argumento capturado no sender.
-- [ ] 3.6 Isolar a falha por candidato no laço, com `WARN` contendo apenas o `consulta_id`, e devolver a quantidade de lembretes confirmados (D5). Verificar em `IdempotenciaDoLembreteIT#falhaNoEnvioNaoDeixaLembreteEConsultaSegueElegivel` — nenhum registro após a falha e envio registrado na execução seguinte — e em `IdempotenciaDoLembreteIT#falhaEmUmaConsultaNaoImpedeAsDemais`, com o sender falhando só para um destinatário.
-- [ ] 3.7 Verificar em `JanelaDoLembreteIT#execucaoSemCandidatosTerminaSemEfeito` que a execução com agenda vazia devolve zero, não aciona o sender e não grava registro.
-- [ ] 3.8 Manter `LEMBRETE_D1` fora do contrato: cobertura estrutural exigindo os cinco valores de `TipoEvento`, nenhuma ocorrência de `LEMBRETE` em `shared-contracts` e nenhuma dependência de mensageria no caso de uso. Verificar também em `RegistroDoLembreteIT#tipoDoLembreteFicaForaDoContratoDeEventos` que, depois de uma execução com lembretes, as filas normativas e suas DLQs não recebem mensagem.
+- [x] 3.1 Implementar o comando de candidatos de D3 como constante do código de produção, emitido por `JdbcTemplate`, com `agora` e `agora + 24h` do `Clock` injetado como parâmetros e ordenação `data_hora, consulta_id`. Verificar as bordas em `JanelaDoLembreteIT` com o `Clock` fixo da base: 23h59 recebe, exatamente 24h recebe, 24h01 não recebe, e o instante da execução ou um minuto antes não recebe.
+- [x] 3.2 Restringir o comando a `AGENDADA` e `CONFIRMADA`; verificar em `JanelaDoLembreteIT` que ambas são lembradas e que `CANCELADA` e `REALIZADA` dentro da janela não recebem envio nem registro.
+- [x] 3.3 Implementar a operação por candidato num bean próprio com `@Transactional(propagation = REQUIRED)`: reserva por `INSERT ... ON CONFLICT (consulta_id) WHERE tipo = 'LEMBRETE_D1' DO NOTHING`, encerramento sem envio quando nenhuma linha é afetada, e envio depois da reserva (D4). O laço que percorre os candidatos **não** é transacional. Verificar com cobertura estrutural em `ProtecoesEstruturaisNotificacaoTest`: fronteira transacional do candidato, ausência de `@Transactional` no laço, e a reserva antes do envio na sequência do código-fonte.
+- [x] 3.4 Acrescentar o texto do lembrete a `TemplatesDeNotificacao` — português, assunto "Lembrete de consulta", data e hora formatadas em `America/Sao_Paulo` — sem alterar `notifica(TipoEvento)` nem o mapa de eventos (D8). Verificar em `RegistroDoLembreteIT#conteudoInformaMedicoEHorarioLocal` que 12/09/2026 14:30 UTC aparece como 12/09/2026 11:30, e que `NotificacaoReativaIT` continua verde.
+- [x] 3.5 Gravar o registro com tipo `LEMBRETE_D1`, e-mail do paciente como destinatário, `sender.canal()`, `enviado_em` do `Clock` e o mesmo conteúdo entregue ao canal. Verificar em `RegistroDoLembreteIT#lembreteConfirmadoFicaRegistradoComoFoiEntregue`, comparando o registro com o argumento capturado no sender.
+- [x] 3.6 Isolar a falha por candidato no laço, com `WARN` contendo apenas o `consulta_id`, e devolver a quantidade de lembretes confirmados (D5). Verificar em `IdempotenciaDoLembreteIT#falhaNoEnvioNaoDeixaLembreteEConsultaSegueElegivel` — nenhum registro após a falha e envio registrado na execução seguinte — e em `IdempotenciaDoLembreteIT#falhaEmUmaConsultaNaoImpedeAsDemais`, com o sender falhando só para um destinatário.
+- [x] 3.7 Verificar em `JanelaDoLembreteIT#execucaoSemCandidatosTerminaSemEfeito` que a execução com agenda vazia devolve zero, não aciona o sender e não grava registro.
+- [x] 3.8 Manter `LEMBRETE_D1` fora do contrato: cobertura estrutural exigindo os cinco valores de `TipoEvento`, nenhuma ocorrência de `LEMBRETE` em `shared-contracts` e nenhuma dependência de mensageria no caso de uso. Verificar também em `RegistroDoLembreteIT#tipoDoLembreteFicaForaDoContratoDeEventos` que, depois de uma execução com lembretes, as filas normativas e suas DLQs não recebem mensagem.
 
 ## 4. Unicidade e concorrência
 
-- [ ] 4.1 Verificar em `IdempotenciaDoLembreteIT#execucaoRepetidaNaoLembraDeNovo` que duas execuções sequenciais deixam um único registro, e que a segunda devolve zero sem acionar o sender.
-- [ ] 4.2 Verificar em `IdempotenciaDoLembreteIT#execucoesConcorrentesConfirmamEEntregamUmUnicoLembrete` duas execuções do caso de uso em threads reais, liberadas pela barreira da base na **entrada da operação por candidato** — depois de as duas lerem os candidatos, antes de reservarem (D9). Exigir um registro, **uma** chamada ao sender e soma das duas contagens igual a um.
-- [ ] 4.3 Verificar em `IdempotenciaDoLembreteIT#consultaRemarcadaDepoisDoLembreteNaoRecebeOutro`, com eventos reais no RabbitMQ: criação dentro da janela, execução com lembrete, atualização com `occurredAt` posterior e novo horário ainda na janela, nova execução sem segundo lembrete — e o aviso reativo de alteração do M06 registrado normalmente.
+- [x] 4.1 Verificar em `IdempotenciaDoLembreteIT#execucaoRepetidaNaoLembraDeNovo` que duas execuções sequenciais deixam um único registro, e que a segunda devolve zero sem acionar o sender.
+- [x] 4.2 Verificar em `IdempotenciaDoLembreteIT#execucoesConcorrentesConfirmamEEntregamUmUnicoLembrete` duas execuções do caso de uso em threads reais, liberadas pela barreira da base na **entrada da operação por candidato** — depois de as duas lerem os candidatos, antes de reservarem (D9). Exigir um registro, **uma** chamada ao sender e soma das duas contagens igual a um.
+- [x] 4.3 Verificar em `IdempotenciaDoLembreteIT#consultaRemarcadaDepoisDoLembreteNaoRecebeOutro`, com eventos reais no RabbitMQ: criação dentro da janela, execução com lembrete, atualização com `occurredAt` posterior e novo horário ainda na janela, nova execução sem segundo lembrete — e o aviso reativo de alteração do M06 registrado normalmente.
 
 ## 5. Evidência de SQL e de plano
 
-- [ ] 5.1 Criar na base o gravador de SQL que embrulha a `DataSource` e registra o texto de todo comando preparado ou executado, só na thread e na janela armadas pelo teste (D9). Verificar que ele captura um comando conhecido e ignora os de outra thread, e que as suítes do M06 continuam verdes com ele ativo.
-- [ ] 5.2 Verificar em `ConsultaDeCandidatosIT#recortesAplicadosNoComandoEnviado`, sobre o comando **capturado**: recorte de status, dois limites como parâmetros, `NOT EXISTS` sobre `LEMBRETE_D1`, e nenhum `now()`, `current_timestamp` ou equivalente.
-- [ ] 5.3 Verificar em `ConsultaDeCandidatosIT#maisCandidatosNaoMultiplicamLeituras` que execuções com 1 e com 20 candidatos emitem exatamente um `SELECT` cada — contagem positiva dos dois lados — e um número de gravações igual ao de lembretes confirmados.
-- [ ] 5.4 Verificar em `IndicesDoLembreteIT#planoUsaOIndiceDeStatusEHorario` o `EXPLAIN` do **texto capturado** em 5.2, com os parâmetros do relógio fixo, sobre massa representativa e seletiva — milhares de linhas em centenas de dias, os quatro status, lembretes prévios — e `ANALYZE`, sem `enable_seqscan=off`. Exigir `idx_agenda_local_status_data_hora` no plano. **Regra de parada:** se o planner escolher varredura sequencial, interromper o apply e reabrir D2 por `/opsx:update`.
+- [x] 5.1 Criar na base o gravador de SQL que embrulha a `DataSource` e registra o texto de todo comando preparado ou executado, só na thread e na janela armadas pelo teste (D9). Verificar que ele captura um comando conhecido e ignora os de outra thread, e que as suítes do M06 continuam verdes com ele ativo.
+- [x] 5.2 Verificar em `ConsultaDeCandidatosIT#recortesAplicadosNoComandoEnviado`, sobre o comando **capturado**: recorte de status, dois limites como parâmetros, `NOT EXISTS` sobre `LEMBRETE_D1`, e nenhum `now()`, `current_timestamp` ou equivalente.
+- [x] 5.3 Verificar em `ConsultaDeCandidatosIT#maisCandidatosNaoMultiplicamLeituras` que execuções com 1 e com 20 candidatos emitem exatamente um `SELECT` cada — contagem positiva dos dois lados — e um número de gravações igual ao de lembretes confirmados.
+- [x] 5.4 Verificar em `IndicesDoLembreteIT#planoUsaOIndiceDeStatusEHorario` o `EXPLAIN` do **texto capturado** em 5.2, com os parâmetros do relógio fixo, sobre massa representativa e seletiva — milhares de linhas em centenas de dias, os quatro status, lembretes prévios — e `ANALYZE`, sem `enable_seqscan=off`. Exigir `idx_agenda_local_status_data_hora` no plano. **Regra de parada:** se o planner escolher varredura sequencial, interromper o apply e reabrir D2 por `/opsx:update`.
 
 ## 6. Execução automática
 
-- [ ] 6.1 Criar `AgendadorDeLembretes` no pacote `scheduler`, removendo o `.gitkeep`, com `@EnableScheduling`, `@ConditionalOnProperty(matchIfMissing = true)` e `@Scheduled(cron = "${notificacao.lembrete.cron:0 0 * * * *}")` delegando ao caso de uso (D6). Verificar em `AgendadorDeLembretesTest`, com `ApplicationContextRunner` restrito às classes do agendador e **sem herdar o profile `test` dos recursos de teste**, que sem configuração a tarefa registrada tem cron `0 0 * * * *` e que uma expressão configurada substitui a padrão.
-- [ ] 6.2 Verificar a ausência no profile `test` em duas camadas. Em `AgendadorDeLembretesTest`: com o `application.yml` de produção e o profile `test`, o bean e a tarefa não existem. Em `AgendadorDesligadoIT#profileDeTesteNaoExecutaAutomaticamente`, no contexto da base: nenhum `AgendadorDeLembretes`, nenhuma tarefa agendada, e uma consulta elegível sem lembrete até o disparo explícito do caso de uso.
-- [ ] 6.3 Verificar em `DelegacaoDoLembreteTest#automaticoEManualAplicamAMesmaRegra` que job e endpoint chamam a mesma operação do caso de uso, e que cada um tem como única dependência o caso de uso — sem `JdbcTemplate`, `Clock`, `NotificationSenderPort` ou SQL.
+- [x] 6.1 Criar `AgendadorDeLembretes` no pacote `scheduler`, removendo o `.gitkeep`, com `@EnableScheduling`, `@ConditionalOnProperty(matchIfMissing = true)` e `@Scheduled(cron = "${notificacao.lembrete.cron:0 0 * * * *}")` delegando ao caso de uso (D6). Verificar em `AgendadorDeLembretesTest`, com `ApplicationContextRunner` restrito às classes do agendador e **sem herdar o profile `test` dos recursos de teste**, que sem configuração a tarefa registrada tem cron `0 0 * * * *` e que uma expressão configurada substitui a padrão.
+- [x] 6.2 Verificar a ausência no profile `test` em duas camadas. Em `AgendadorDeLembretesTest`: com o `application.yml` de produção e o profile `test`, o bean e a tarefa não existem. Em `AgendadorDesligadoIT#profileDeTesteNaoExecutaAutomaticamente`, no contexto da base: nenhum `AgendadorDeLembretes`, nenhuma tarefa agendada, e uma consulta elegível sem lembrete até o disparo explícito do caso de uso.
+- [x] 6.3 Verificar em `DelegacaoDoLembreteTest#automaticoEManualAplicamAMesmaRegra` que job e endpoint chamam a mesma operação do caso de uso, e que cada um tem como única dependência o caso de uso — sem `JdbcTemplate`, `Clock`, `NotificationSenderPort` ou SQL.
 
 ## 7. Endpoint, segurança e erros HTTP
 
-- [ ] 7.1 Criar `LembreteController` com `POST /internal/lembretes/executar`, `@PreAuthorize("hasAnyRole('MEDICO','ENFERMEIRO')")` e resposta `ResultadoDaExecucao(int lembretesEnviados)`. Verificar em `DisparoManualIT#disparoSemCandidatosRespondeZero` que a execução sem candidatos recebe 200 com `lembretesEnviados` 0. Os resultados por perfil vêm do IT da matriz (8.5).
-- [ ] 7.2 Verificar em `DisparoManualIT`, com um método por caso e uma consulta elegível semeada, exigindo zero envio e zero registro: sem token → 401; token expirado do mesmo emissor → 401; token malformado e token assinado com outro segredo → 401 com `type` de não autenticado de `RespostaDeSeguranca`.
-- [ ] 7.3 Verificar em `DisparoManualIT` exatamente uma `SecurityFilterChain` no contexto e que um caminho fora de `/internal/**`, como `/api/qualquer`, cai no `denyAll`. Acrescentar cobertura estrutural que recusa `@EnableWebSecurity` ou bean de `SecurityFilterChain` declarado no módulo.
-- [ ] 7.4 Criar `CoberturaDeAutorizacaoNotificacaoTest`, que varre as classes compiladas e exige `@PreAuthorize` de método sem `permitAll` em todo mapeamento HTTP. Verificar que a varredura encontra exatamente o endpoint do lembrete — nunca zero —, que os mapeamentos encontrados coincidem com os endpoints da tabela do notificação em `docs/02` §3, e que um infrator nas classes de teste é **encontrado** pela mesma varredura e recusado.
-- [ ] 7.5 Atualizar os comentários de `SegurancaAutoConfiguration` e `SegurancaAutoConfigurationTest` que ainda descrevem dois consumidores, e acrescentar a `SegurancaAutoConfigurationTest` um caso com `hospital.security.caminhos.autenticados=/internal/**`: uma única cadeia, e `/api/**` substituído caindo no `denyAll`. Verificar com `mvn -q -pl shared-security test`.
-- [ ] 7.6 Fortalecer `ProtecoesEstruturaisNotificacaoTest#nenhumaClasseLeORelogioDiretamente` para recusar também `now()` isolado, `current_timestamp`, `localtimestamp`, `clock_timestamp()` e `statement_timestamp()` em `src/main`, sem distinguir caixa. Verificar a sensibilidade com textos de exemplo recusados e aceitos, como a guarda de segredo já faz.
-- [ ] 7.7 Criar o tratador estreito de D5: `@RestControllerAdvice(assignableTypes = LembreteController.class)` com `@ExceptionHandler(Exception.class)`. Ele relança intactas `AccessDeniedException` e `AuthenticationException` e traduz o resto em 500 `application/problem+json`, com:
+- [x] 7.1 Criar `LembreteController` com `POST /internal/lembretes/executar`, `@PreAuthorize("hasAnyRole('MEDICO','ENFERMEIRO')")` e resposta `ResultadoDaExecucao(int lembretesEnviados)`. Verificar em `DisparoManualIT#disparoSemCandidatosRespondeZero` que a execução sem candidatos recebe 200 com `lembretesEnviados` 0. Os resultados por perfil vêm do IT da matriz (8.5).
+- [x] 7.2 Verificar em `DisparoManualIT`, com um método por caso e uma consulta elegível semeada, exigindo zero envio e zero registro: sem token → 401; token expirado do mesmo emissor → 401; token malformado e token assinado com outro segredo → 401 com `type` de não autenticado de `RespostaDeSeguranca`.
+- [x] 7.3 Verificar em `DisparoManualIT` exatamente uma `SecurityFilterChain` no contexto e que um caminho fora de `/internal/**`, como `/api/qualquer`, cai no `denyAll`. Acrescentar cobertura estrutural que recusa `@EnableWebSecurity` ou bean de `SecurityFilterChain` declarado no módulo.
+- [x] 7.4 Criar `CoberturaDeAutorizacaoNotificacaoTest`, que varre as classes compiladas e exige `@PreAuthorize` de método sem `permitAll` em todo mapeamento HTTP. Verificar que a varredura encontra exatamente o endpoint do lembrete — nunca zero —, que os mapeamentos encontrados coincidem com os endpoints da tabela do notificação em `docs/02` §3, e que um infrator nas classes de teste é **encontrado** pela mesma varredura e recusado.
+- [x] 7.5 Atualizar os comentários de `SegurancaAutoConfiguration` e `SegurancaAutoConfigurationTest` que ainda descrevem dois consumidores, e acrescentar a `SegurancaAutoConfigurationTest` um caso com `hospital.security.caminhos.autenticados=/internal/**`: uma única cadeia, e `/api/**` substituído caindo no `denyAll`. Verificar com `mvn -q -pl shared-security test`.
+- [x] 7.6 Fortalecer `ProtecoesEstruturaisNotificacaoTest#nenhumaClasseLeORelogioDiretamente` para recusar também `now()` isolado, `current_timestamp`, `localtimestamp`, `clock_timestamp()` e `statement_timestamp()` em `src/main`, sem distinguir caixa. Verificar a sensibilidade com textos de exemplo recusados e aceitos, como a guarda de segredo já faz.
+- [x] 7.7 Criar o tratador estreito de D5: `@RestControllerAdvice(assignableTypes = LembreteController.class)` com `@ExceptionHandler(Exception.class)`. Ele relança intactas `AccessDeniedException` e `AuthenticationException` e traduz o resto em 500 `application/problem+json`, com:
   - `type` `https://hospital.fiap.br/erros/erro-interno`, título "Erro interno" e detalhe fixo e genérico em português;
   - `instance`, `timestamp` do `Clock`, e `correlationId` do atributo da requisição, do `X-Correlation-Id` ou gerado;
   - a causa registrada em `ERROR` no log.
@@ -67,11 +67,11 @@
 
 ## 8. Matriz normativa de autorização
 
-- [ ] 8.1 Acrescentar a `docs/02-especificacao-funcional.md` §3 a tabela `### notificacao-service — REST interno`, entre a tabela GraphQL e a nota `**Teste obrigatório:**`, na disposição de colunas da tabela do agendamento: `| /internal/lembretes/executar | POST | ✅ | ✅ | ❌ 403 |` — isto é, `POST /internal/lembretes/executar | MEDICO ✅ | ENFERMEIRO ✅ | PACIENTE ❌ 403`. Verificar que as tabelas do agendamento e do histórico não mudam de conteúdo.
-- [ ] 8.2 Mudar o marcador final de `MatrizDeAutorizacaoGraphql`, no `historico-service`, de `**Teste obrigatório:**` para o título `### notificacao-service — REST interno` — a única alteração nesse leitor e em sua suíte. Preservar, sem duplicar nem reescrever, a asserção existente `MatrizDeAutorizacaoGraphqlIT#leituraEncontrouAMatrizCompleta` (5 operações, 3 perfis e 15 células) e verificar que ela continua verde com o novo marcador: `mvn -q -pl historico-service -am -Dit.test='MatrizDeAutorizacaoGraphqlIT' -Dfailsafe.failIfNoSpecifiedTests=false verify`.
-- [ ] 8.3 Conferir que o leitor do agendamento continua terminando em `### historico-service`, sem mudança de código, e que a asserção existente de 7 endpoints, 3 perfis e 21 células segue verde. Verificar com `mvn -q -pl agendamento-service -am -Dit.test='MatrizDeAutorizacaoIT' -Dfailsafe.failIfNoSpecifiedTests=false verify`.
-- [ ] 8.4 Criar `MatrizDeAutorizacaoNotificacao` no `notificacao-service`, leitor da tabela nova do título até `**Teste obrigatório:**` no mesmo formato dos outros dois. Verificar em `MatrizDeAutorizacaoNotificacaoIT#matrizTemUmEndpointTresPerfisETresCelulas` a asserção positiva de exatamente 1 endpoint, 3 perfis e 3 células.
-- [ ] 8.5 Criar em `MatrizDeAutorizacaoNotificacaoIT` três métodos explícitos, um por célula, cada um com o `@DisplayName` exato de seu Scenario:
+- [x] 8.1 Acrescentar a `docs/02-especificacao-funcional.md` §3 a tabela `### notificacao-service — REST interno`, entre a tabela GraphQL e a nota `**Teste obrigatório:**`, na disposição de colunas da tabela do agendamento: `| /internal/lembretes/executar | POST | ✅ | ✅ | ❌ 403 |` — isto é, `POST /internal/lembretes/executar | MEDICO ✅ | ENFERMEIRO ✅ | PACIENTE ❌ 403`. Verificar que as tabelas do agendamento e do histórico não mudam de conteúdo.
+- [x] 8.2 Mudar o marcador final de `MatrizDeAutorizacaoGraphql`, no `historico-service`, de `**Teste obrigatório:**` para o título `### notificacao-service — REST interno` — a única alteração nesse leitor e em sua suíte. Preservar, sem duplicar nem reescrever, a asserção existente `MatrizDeAutorizacaoGraphqlIT#leituraEncontrouAMatrizCompleta` (5 operações, 3 perfis e 15 células) e verificar que ela continua verde com o novo marcador: `mvn -q -pl historico-service -am -Dit.test='MatrizDeAutorizacaoGraphqlIT' -Dfailsafe.failIfNoSpecifiedTests=false verify`.
+- [x] 8.3 Conferir que o leitor do agendamento continua terminando em `### historico-service`, sem mudança de código, e que a asserção existente de 7 endpoints, 3 perfis e 21 células segue verde. Verificar com `mvn -q -pl agendamento-service -am -Dit.test='MatrizDeAutorizacaoIT' -Dfailsafe.failIfNoSpecifiedTests=false verify`.
+- [x] 8.4 Criar `MatrizDeAutorizacaoNotificacao` no `notificacao-service`, leitor da tabela nova do título até `**Teste obrigatório:**` no mesmo formato dos outros dois. Verificar em `MatrizDeAutorizacaoNotificacaoIT#matrizTemUmEndpointTresPerfisETresCelulas` a asserção positiva de exatamente 1 endpoint, 3 perfis e 3 células.
+- [x] 8.5 Criar em `MatrizDeAutorizacaoNotificacaoIT` três métodos explícitos, um por célula, cada um com o `@DisplayName` exato de seu Scenario:
   - `medicoDisparaAExecucao`;
   - `enfermeiroDisparaAExecucao`;
   - `pacienteERecusadoSemExecutarAVarredura`.
@@ -84,7 +84,7 @@
 
 ## 9. Documentação e rastreabilidade
 
-- [ ] 9.1 Acrescentar ao README a seção do lembrete D-1 (M07). Conteúdo:
+- [x] 9.1 Acrescentar ao README a seção do lembrete D-1 (M07). Conteúdo:
   - janela e status elegíveis; cadência horária e as duas propriedades;
   - endpoint, perfis, resposta, recusas 401/403 e o 500 em Problem Detail;
   - regra de um lembrete por vida da consulta, inclusive após remarcação, e garantia de entrega;
@@ -92,16 +92,16 @@
   - a observação de que o serviço não sobe sem a variável.
 
   Não tocar o CHANGELOG. Verificar que os comandos citados correspondem às propriedades e à rota implementadas.
-- [ ] 9.2 Atualizar `docs/01-arquitetura.md` §5 com janela, status, reserva antes do envio, unicidade parcial, índice, falha isolada, erro interno em Problem Detail, execução automática, endpoint e garantia externa; e acrescentar a `docs/02-especificacao-funcional.md` §4 a linha de índices do `notificacao_db`. Verificar coerência com D1–D8.
-- [ ] 9.3 Alinhar a release `0.2.0` ao fechamento depois do M07: `docs/00-project-charter.md` §7.1 e `docs/05-fluxo-de-trabalho.md` §4 passam de "M09 / `add-historico-graphql`" para "M07 / `add-lembrete-24h`", mantendo RF-11 a RF-20. Em `docs/04-roadmap.md`, o marcador "Ao fim deste change: abrir `release/0.2.0`" sai do M09 e vai para o M07, coerente com a sequência do topo do documento. Verificar por `grep -n "0.2.0" docs/00-project-charter.md docs/04-roadmap.md docs/05-fluxo-de-trabalho.md README.md` que nenhuma referência aponta para o M09.
-- [ ] 9.4 Criar `MatrizDeCenariosDoLembreteTest`, com a matriz abaixo mantida em código. A cobertura falha se:
+- [x] 9.2 Atualizar `docs/01-arquitetura.md` §5 com janela, status, reserva antes do envio, unicidade parcial, índice, falha isolada, erro interno em Problem Detail, execução automática, endpoint e garantia externa; e acrescentar a `docs/02-especificacao-funcional.md` §4 a linha de índices do `notificacao_db`. Verificar coerência com D1–D8.
+- [x] 9.3 Alinhar a release `0.2.0` ao fechamento depois do M07: `docs/00-project-charter.md` §7.1 e `docs/05-fluxo-de-trabalho.md` §4 passam de "M09 / `add-historico-graphql`" para "M07 / `add-lembrete-24h`", mantendo RF-11 a RF-20. Em `docs/04-roadmap.md`, o marcador "Ao fim deste change: abrir `release/0.2.0`" sai do M09 e vai para o M07, coerente com a sequência do topo do documento. Verificar por `grep -n "0.2.0" docs/00-project-charter.md docs/04-roadmap.md docs/05-fluxo-de-trabalho.md README.md` que nenhuma referência aponta para o M09.
+- [x] 9.4 Criar `MatrizDeCenariosDoLembreteTest`, com a matriz abaixo mantida em código. A cobertura falha se:
   - a matriz estiver vazia;
   - um método não existir ou não for teste;
   - o `@DisplayName` não for `Scenario: <título>`, com comparação sem acentos e sem caixa;
   - os títulos divergirem dos Scenarios dos seis Requirements do M07, lidos do delta enquanto a change está ativa e da capability promovida depois do archive.
 
   Não há exceção para método parametrizado: todo Scenario aponta um método próprio. Verificar a sensibilidade com uma linha removida e com um título alterado, restaurando depois.
-- [ ] 9.5 Manter a matriz abaixo alinhada aos métodos reais, conferindo os 30 Scenarios por execução, e nunca por nome de classe ou task marcada.
+- [x] 9.5 Manter a matriz abaixo alinhada aos métodos reais, conferindo os 30 Scenarios por execução, e nunca por nome de classe ou task marcada.
 
 ### Matriz Scenario → método
 
@@ -140,13 +140,13 @@
 
 ## 10. Verificação
 
-- [ ] 10.1 Executar validação e status da change; conferir a capability modificada, 6 Requirements e 30 Scenarios adicionados, e os quatro artefatos completos.
+- [x] 10.1 Executar validação e status da change; conferir a capability modificada, 6 Requirements e 30 Scenarios adicionados, e os quatro artefatos completos.
 
 ```bash
 openspec validate add-lembrete-24h --strict && openspec status --change add-lembrete-24h
 ```
 
-- [ ] 10.2 Executar a suíte dirigida do `notificacao-service` e do `shared-security` com PostgreSQL 16 e RabbitMQ 3.13 reais, sem lista de nomes — um filtro por nome silencia a suíte que não casa.
+- [x] 10.2 Executar a suíte dirigida do `notificacao-service` e do `shared-security` com PostgreSQL 16 e RabbitMQ 3.13 reais, sem lista de nomes — um filtro por nome silencia a suíte que não casa.
 
 ```bash
 mvn -q -pl notificacao-service -am -Dit.test='*IT' -Dfailsafe.failIfNoSpecifiedTests=false verify
@@ -158,7 +158,7 @@ Conferir por comparação explícita que cada suíte esperada, do M06 e do M07, 
 for s in ConfiguracaoNotificacaoIT SchemaNotificacaoIT PersistenciaNotificacaoIT RelogioNotificacaoIT CorrelacaoNotificacaoIT IdempotenciaNotificacaoIT AgendaLocalIT OrdenacaoAgendaIT NotificacaoReativaIT SelecaoDeSenderIT EntradasHostisNotificacaoIT ConsumoNotificacaoRabbitMqIT DesacoplamentoNotificacaoIT JanelaDoLembreteIT RegistroDoLembreteIT IdempotenciaDoLembreteIT ConsultaDeCandidatosIT IndicesDoLembreteIT AgendadorDesligadoIT DisparoManualIT MatrizDeAutorizacaoNotificacaoIT; do f=$(ls notificacao-service/target/failsafe-reports/TEST-*.$s.xml 2>/dev/null) || { echo "AUSENTE: $s"; exit 1; }; grep -q 'skipped="0"' "$f" || { echo "IGNORADOS EM: $s"; exit 1; }; done; for s in ProtecoesEstruturaisNotificacaoTest AgendadorDeLembretesTest DelegacaoDoLembreteTest CoberturaDeAutorizacaoNotificacaoTest MatrizDeCenariosDoLembreteTest; do f=$(ls notificacao-service/target/surefire-reports/TEST-*.$s.xml 2>/dev/null) || { echo "AUSENTE: $s"; exit 1; }; grep -q 'skipped="0"' "$f" || { echo "IGNORADOS EM: $s"; exit 1; }; done; f=$(ls shared-security/target/surefire-reports/TEST-*.SegurancaAutoConfigurationTest.xml 2>/dev/null) || { echo "AUSENTE: SegurancaAutoConfigurationTest"; exit 1; }; grep -q 'skipped="0"' "$f" || { echo "IGNORADOS EM: SegurancaAutoConfigurationTest"; exit 1; }; echo "todas as suites do M06 e do M07 executadas, zero ignorados"
 ```
 
-- [ ] 10.3 Executar o gate global na raiz, sem testes ignorados; registrar a contagem por módulo e o resultado final. Em seguida, conferir que as matrizes do agendamento e do histórico rodaram sem teste ignorado.
+- [x] 10.3 Executar o gate global na raiz, sem testes ignorados; registrar a contagem por módulo e o resultado final. Em seguida, conferir que as matrizes do agendamento e do histórico rodaram sem teste ignorado.
 
 ```bash
 mvn -q clean verify
@@ -168,13 +168,13 @@ mvn -q clean verify
 for r in agendamento-service/target/failsafe-reports/TEST-*.MatrizDeAutorizacaoIT.xml historico-service/target/failsafe-reports/TEST-*.MatrizDeAutorizacaoGraphqlIT.xml; do ls $r >/dev/null 2>&1 || { echo "AUSENTE: $r"; exit 1; }; grep -q 'skipped="0"' $r || { echo "IGNORADOS EM: $r"; exit 1; }; done; echo "matrizes do agendamento e do historico executadas"
 ```
 
-- [ ] 10.4 Conferir o JaCoCo do `notificacao-service` — mínimo de 80% de linha no módulo — a partir do relatório do gate, registrando o número real, sem antecipar o gate agregado do M10.
+- [x] 10.4 Conferir o JaCoCo do `notificacao-service` — mínimo de 80% de linha no módulo — a partir do relatório do gate, registrando o número real, sem antecipar o gate agregado do M10.
 
 ```bash
 grep -o '<counter type="LINE"[^/]*/>' notificacao-service/target/site/jacoco/jacoco.xml | tail -1
 ```
 
-- [ ] 10.5 Demonstrar sensibilidade pelas mutações de D9. Cada uma é isolada, restaurada e seguida da suíte afetada verde antes da próxima:
+- [x] 10.5 Demonstrar sensibilidade pelas mutações de D9. Cada uma é isolada, restaurada e seguida da suíte afetada verde antes da próxima:
   - (a) `<=` do limite vira `<` → borda de 24h vermelha;
   - (a') limite ampliado em um minuto → borda de 24h01 vermelha;
   - (b) recorte de status removido → canceladas e realizadas vermelho;
@@ -186,6 +186,17 @@ grep -o '<counter type="LINE"[^/]*/>' notificacao-service/target/site/jacoco/jac
   - (e') relançamento de `AccessDeniedException` removido do tratador → `pacienteERecusadoSemExecutarAVarredura` vermelho, com 500 no lugar de 403;
   - (f) célula `MEDICO` de `docs/02` §3 alterada para `❌ 403` → `MatrizDeAutorizacaoNotificacaoIT#medicoDisparaAExecucao` vermelho;
   - (f') célula `ENFERMEIRO`, e depois a linha inteira, removida de `docs/02` §3 → `enfermeiroDisparaAExecucao`, `matrizTemUmEndpointTresPerfisETresCelulas` e a cobertura estrutural de 7.4 vermelhos.
+
+  **Evidência executada** — substituição aprovada pelo gestor; os critérios acima não mudam:
+  - Cada uma das 12 mutações ficou vermelha isoladamente nos testes previstos: (a), (a'), (b), (c''), (c), (c'), (d), (e), (e'), (f), (f') célula `ENFERMEIRO` e (f') linha inteira.
+  - Cada arquivo foi restaurado byte a byte, com conferência, antes da mutação seguinte.
+  - A suíte afetada **não** foi executada em verde imediatamente após cada restauração. A execução da mutação seguinte exigiu verde no teste derrubado pela anterior, o que não equivale à suíte verde imediata.
+  - O estado restaurado foi comprovado ao final por `mvn -q clean verify`, a partir de `clean`, com todas as suítes verdes: 1183 testes, zero ignorados.
+    - shared-contracts: 134
+    - shared-security: 73
+    - agendamento-service: 744
+    - notificacao-service: 113
+    - historico-service: 119
 - [ ] 10.6 Verificar a partir de clone limpo da feature branch, depois do push, em diretório temporário único, removido após registrar o resultado.
 
 ```bash
