@@ -199,7 +199,7 @@ curl -s -X POST http://localhost:8081/auth/login \
   -d '{"email":"medico@hospital.com","senha":"Senha@123"}'
 ```
 
-A resposta traz `token`, `expiraEmSegundos` e `perfil`. Use o token como `Bearer` nas
+A resposta traz `accessToken`, `expiresIn` e `perfil`. Use o `accessToken` como `Bearer` nas
 demais chamadas:
 
 ```bash
@@ -346,6 +346,83 @@ envio realizado — não use essa tabela como prova absoluta de que um paciente 
 
 Rollback: parar o consumidor e preservar banco, fila, DLQ, agenda e auditoria; retomar após a
 correção, sem apagar marcas processadas.
+
+## Lembrete D-1 (M07)
+
+O `notificacao-service` avisa o paciente na véspera. A varredura D-1 lê a `agenda_local` e
+lembra cada consulta `AGENDADA` ou `CONFIRMADA` cujo horário esteja em `(agora, agora + 24h]` —
+estritamente no futuro e até 24 horas à frente, inclusive. `CANCELADA` e `REALIZADA` nunca
+recebem lembrete. O horário no texto sai no fuso `America/Sao_Paulo`.
+
+**Cadência.** Um job executa a varredura no início de cada hora. A expressão vem de
+`NOTIFICACAO_LEMBRETE_CRON` (cron do Spring, padrão `0 0 * * * *`), e
+`NOTIFICACAO_LEMBRETE_AGENDADOR_HABILITADO=false` desliga o job sem desligar o consumidor nem o
+endpoint. No profile `test` o job não existe.
+
+**Um lembrete por consulta, durante toda a vida dela.** A regra é garantida por unicidade no
+PostgreSQL, com a reserva do registro feita antes do envio: execuções concorrentes — o job e o
+disparo manual, ou duas instâncias — entregam um único lembrete. Consulta remarcada depois de
+lembrada **não** recebe outro; o aviso de alteração do M06 informa o novo horário. Se o canal
+falhar, nada fica registrado e a próxima execução tenta de novo, e a falha de uma consulta não
+impede as demais.
+
+**Garantia:** o efeito persistido é no máximo um lembrete por consulta. O envio externo é
+ao-menos-uma-vez numa janela: se o canal recebe a mensagem e a confirmação da transação falha,
+a execução seguinte reenvia.
+
+### Disparo manual
+
+`POST /internal/lembretes/executar` executa a varredura na hora — é o que permite demonstrar o
+lembrete sem esperar a hora cheia. Exige o mesmo JWT emitido por `POST /auth/login` no
+agendamento.
+
+| Situação | Resposta |
+|---|---|
+| MEDICO ou ENFERMEIRO | `200` com `{"lembretesEnviados": n}`, inclusive `0` |
+| PACIENTE | `403` em Problem Detail, `type` `acesso-negado` |
+| Token ausente, expirado ou inválido | `401` em Problem Detail, `type` `nao-autenticado` |
+| Banco indisponível na leitura dos candidatos | `500` em Problem Detail, `type` `erro-interno`, com `correlationId` |
+
+A célula de cada perfil está na matriz normativa de
+[docs/02-especificacao-funcional.md](docs/02-especificacao-funcional.md) §3, e os testes a leem
+de lá.
+
+### Demonstração
+
+O token é assinado pelo agendamento e validado pela notificação com o mesmo segredo. O
+`notificacao-service` **não sobe sem `JWT_SECRET`** — não há valor padrão —, e nem o Maven nem
+o Spring leem o `.env`. Exporte as variáveis em **cada** sessão de shell que sobe um serviço:
+
+```bash
+set -a; . ./.env; set +a
+```
+
+No primeiro terminal, o agendamento com os usuários de demonstração:
+
+```bash
+SPRING_PROFILES_ACTIVE=demo mvn -pl agendamento-service -am spring-boot:run
+```
+
+No segundo terminal, depois do mesmo `set -a; . ./.env; set +a`:
+
+```bash
+mvn -pl notificacao-service -am spring-boot:run
+```
+
+Crie uma consulta para as próximas 24 horas por `POST /api/v1/consultas` (ver
+[Usar a API](#usar-a-api)); o evento chega à agenda local da notificação. Então dispare:
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8081/auth/login -H 'Content-Type: application/json' -d '{"email":"medico@hospital.com","senha":"Senha@123"}' | jq -r .accessToken)
+```
+
+```bash
+curl -s -X POST http://localhost:8082/internal/lembretes/executar -H "Authorization: Bearer $TOKEN"
+```
+
+A resposta é `{"lembretesEnviados":1}`, e o lembrete aparece no log da notificação — ou no
+servidor SMTP, com `NOTIFICACAO_SENDER=smtp`. Um segundo disparo responde `0`: a consulta já foi
+lembrada.
 
 ## Rollback do histórico (M08)
 
