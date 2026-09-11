@@ -4,22 +4,32 @@ import br.com.fiap.hospital.contracts.ConsultaPayload;
 import br.com.fiap.hospital.contracts.EventoEnvelope;
 import br.com.fiap.hospital.contracts.MensageriaAutoConfiguration;
 import br.com.fiap.hospital.contracts.TipoEvento;
+import br.com.fiap.hospital.notificacao.lembrete.RegistradorDeLembrete;
+import br.com.fiap.hospital.notificacao.lembrete.ServicoDeLembretes;
 import br.com.fiap.hospital.notificacao.repository.EventoProcessadoRepository;
 import br.com.fiap.hospital.notificacao.repository.NotificacaoEnviadaRepository;
 import br.com.fiap.hospital.notificacao.sender.NotificationSenderPort;
+import br.com.fiap.hospital.security.JwtProperties;
+import br.com.fiap.hospital.security.JwtService;
+import br.com.fiap.hospital.security.UsuarioAutenticado;
+import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import javax.sql.DataSource;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
 import org.mockito.Mockito;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.config.BeanPostProcessor;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.mock.mockito.SpyBean;
@@ -29,21 +39,32 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * Base das suites do M06: aplicacao real, PostgreSQL real, RabbitMQ real.
+ * Base das suites do M06 e do M07: aplicacao real, PostgreSQL real, RabbitMQ real.
  *
  * <p>As mensagens entram pela topologia de verdade, publicadas no exchange normativo, e
  * atravessam converter, retry e listener de producao. Chamar o processador direto seria
  * mais rapido e provaria menos: nao diria nada sobre o listener, sobre a transacao da
  * fronteira nem sobre a desserializacao do envelope.
+ *
+ * <p>Tudo o que as suites precisam — espioes, {@code MockMvc}, gravador de SQL, relogio —
+ * fica <b>aqui</b>, e nunca numa suite. Uma declaracao local mudaria a chave do cache de
+ * contexto e criaria um segundo contexto, com um segundo listener competindo pela mesma
+ * fila. O profile {@code test} vem de src/test/resources, e com ele o agendador do lembrete
+ * nao existe: a varredura so roda quando o teste a dispara.
  */
 @SpringBootTest(properties = "logging.level.root=ERROR")
+@AutoConfigureMockMvc
 @Import(NotificacaoITBase.ConfiguracaoDeTeste.class)
 abstract class NotificacaoITBase {
 
     /** Instante do relogio do servico. Nao participa da ordenacao dos fatos. */
     static final Instant AGORA = Instant.parse("2026-09-11T12:00:00Z");
+
+    /** O nome que a DDL de falha usa; a limpeza devolve a tabela se um teste abortar. */
+    static final String AGENDA_INDISPONIVEL = "agenda_local_indisponivel";
 
     @DynamicPropertySource
     static void propriedades(DynamicPropertyRegistry registro) {
@@ -82,15 +103,28 @@ abstract class NotificacaoITBase {
      */
     @SpyBean NotificationSenderPort sender;
 
+    /** O caso de uso do lembrete, espiado para contar execucoes. */
+    @SpyBean ServicoDeLembretes lembretes;
+
+    /** A operacao por candidato, espiada para ancorar a barreira da reserva concorrente. */
+    @SpyBean RegistradorDeLembrete registrador;
+
     @Autowired org.springframework.amqp.core.AmqpAdmin admin;
+    @Autowired MockMvc mvc;
+    @Autowired JwtService jwtService;
+    @Autowired JwtProperties propriedadesJwt;
+    @Autowired RelogioDeTeste relogio;
 
     /** Barreira de concorrencia, desarmada por padrao. Ver {@link Barreira}. */
     final Barreira barreira = new Barreira();
 
     @BeforeEach
     void limpar() {
-        Mockito.reset(sender, jdbc, processados, processador);
+        Mockito.reset(sender, jdbc, processados, processador, lembretes, registrador);
         barreira.desarmar();
+        relogio.fixar(AGORA);
+        SqlEmitido.desarmar();
+        jdbc.execute("ALTER TABLE IF EXISTS " + AGENDA_INDISPONIVEL + " RENAME TO agenda_local");
         jdbc.execute("TRUNCATE agenda_local, notificacao_enviada, evento_processado");
         admin.purgeQueue(MensageriaAutoConfiguration.NOTIFICACAO, false);
         admin.purgeQueue(MensageriaAutoConfiguration.NOTIFICACAO + ".dlq", false);
@@ -100,11 +134,10 @@ abstract class NotificacaoITBase {
      * Sincroniza duas transacoes no ponto exato da corrida.
      *
      * <p>Fica na base e nasce desarmada: uma barreira ativa por padrao travaria toda suite
-     * que nao a usa. O ponto de liberacao e <b>depois</b> da consulta de ausencia do
-     * eventId e <b>antes</b> do upsert — e ali que as duas entregas se julgam a primeira.
-     * Coloca-la no sender seria pior: a primeira transacao ja teria o lock da linha, a
-     * segunda nao chegaria ao envio, e o teste travaria ou passaria sem exercitar a
-     * disputa que diz exercitar.
+     * que nao a usa. No consumo, o ponto de liberacao e <b>depois</b> da consulta de ausencia
+     * do eventId e <b>antes</b> do upsert — e ali que as duas entregas se julgam a primeira.
+     * No lembrete, e <b>depois</b> da leitura dos candidatos e <b>antes</b> da reserva — e
+     * ali que as duas execucoes enxergam a mesma consulta como ainda nao lembrada.
      */
     static final class Barreira {
         private volatile java.util.concurrent.CyclicBarrier barreira;
@@ -118,6 +151,14 @@ abstract class NotificacaoITBase {
         }
 
         void aposConsultaDeIdempotencia() {
+            aguardar();
+        }
+
+        void antesDaReserva() {
+            aguardar();
+        }
+
+        private void aguardar() {
             var atual = barreira;
             if (atual == null) return;
             try {
@@ -149,6 +190,20 @@ abstract class NotificacaoITBase {
             barreira.aposConsultaDeIdempotencia();
             return invocacao.callRealMethod();
         }).when(processador).processar(Mockito.any());
+    }
+
+    /**
+     * Barreira na entrada da operacao por candidato do lembrete.
+     *
+     * <p>As duas execucoes ja leram os candidatos e ainda nao reservaram. Liberadas juntas,
+     * elas disputam a mesma chave da unicidade parcial — que e a corrida que a reserva antes
+     * do envio precisa vencer com uma unica chamada ao canal.
+     */
+    void ligarBarreiraAntesDaReserva() {
+        Mockito.doAnswer(invocacao -> {
+            barreira.antesDaReserva();
+            return invocacao.callRealMethod();
+        }).when(registrador).lembrar(Mockito.any());
     }
 
     /** Faz a gravacao da marca falhar, para provar o rollback do efeito ja aplicado. */
@@ -239,6 +294,71 @@ abstract class NotificacaoITBase {
                 "correlacao-m06", payload);
     }
 
+    // --- agenda e lembretes (M07) -------------------------------------------------------
+
+    /** Semeia a agenda por SQL, com horario exato: as bordas da janela sao valores, nao faixas. */
+    UUID agendar(Instant dataHora, String status) {
+        return agendar(dataHora, status, "maria@hospital.com");
+    }
+
+    UUID agendar(Instant dataHora, String status, String email) {
+        UUID consultaId = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO agenda_local
+                    (consulta_id, paciente_id, paciente_nome, paciente_email, medico_nome,
+                     data_hora, status, ocorrido_em, atualizado_em)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                consultaId, UUID.randomUUID(), "Maria Souza", email, "Dr. Joao Lima",
+                Timestamp.from(dataHora), status, Timestamp.from(AGORA), Timestamp.from(AGORA));
+        return consultaId;
+    }
+
+    long lembretesRegistrados() {
+        return jdbc.queryForObject(
+                "SELECT count(*) FROM notificacao_enviada WHERE tipo = 'LEMBRETE_D1'", Long.class);
+    }
+
+    long lembretesRegistrados(UUID consultaId) {
+        return jdbc.queryForObject(
+                "SELECT count(*) FROM notificacao_enviada WHERE tipo = 'LEMBRETE_D1' AND consulta_id = ?",
+                Long.class, consultaId);
+    }
+
+    /** Relogio fixo, mas ajustavel por teste; a limpeza o devolve a {@link #AGORA}. */
+    void fixarRelogio(Instant instante) {
+        relogio.fixar(instante);
+    }
+
+    // --- identidades --------------------------------------------------------------------
+
+    /** Token do mesmo emissor e segredo do agendamento, emitido no relogio do teste. */
+    String tokenDe(String perfil) {
+        return jwtService.emitir(identidade(perfil));
+    }
+
+    /** Emitido um dia antes do relogio do teste, com validade de oito horas. */
+    String tokenExpiradoDe(String perfil) {
+        var ontem = new JwtService(propriedadesJwt,
+                Clock.fixed(relogio.instant().minus(Duration.ofDays(1)), ZoneOffset.UTC));
+        return ontem.emitir(identidade(perfil));
+    }
+
+    /** Bem formado e em prazo, mas assinado com outro segredo. */
+    String tokenDeOutroSegredo(String perfil) {
+        var alheio = new JwtService(
+                new JwtProperties("outro-segredo-de-teste-com-mais-de-32-bytes", Duration.ofHours(8),
+                        propriedadesJwt.emissor()),
+                relogio);
+        return alheio.emitir(identidade(perfil));
+    }
+
+    private static UsuarioAutenticado identidade(String perfil) {
+        return new UsuarioAutenticado(UUID.randomUUID(), perfil.toLowerCase() + "@hospital.com",
+                perfil, perfil.equals("PACIENTE") ? UUID.randomUUID() : null,
+                perfil.equals("MEDICO") ? UUID.randomUUID() : null);
+    }
+
     // --- leitura ------------------------------------------------------------------------
 
     Map<String, Object> agenda(UUID consultaId) {
@@ -251,9 +371,42 @@ abstract class NotificacaoITBase {
         return jdbc.queryForObject("SELECT count(*) FROM " + tabela, Long.class);
     }
 
+    /**
+     * Um relogio fixo que o teste pode reposicionar.
+     *
+     * <p>Continua fixo: nada nele avanca sozinho. Reposiciona-lo permite colocar uma consulta
+     * de horario exigido pela spec dentro da janela, sem trocar o contexto — trocar o bean
+     * por suite criaria o segundo contexto que esta base existe para evitar.
+     */
+    static final class RelogioDeTeste extends Clock {
+        private volatile Instant instante = AGORA;
+
+        void fixar(Instant novo) {
+            instante = novo;
+        }
+
+        @Override public ZoneId getZone() { return ZoneOffset.UTC; }
+        @Override public Clock withZone(ZoneId zona) { return Clock.fixed(instante, zona); }
+        @Override public Instant instant() { return instante; }
+    }
+
     @TestConfiguration
     static class ConfiguracaoDeTeste {
         /** Relogio fixo: torna asseraveis os instantes que o servico registra. */
-        @Bean @Primary Clock clockDeTeste() { return Clock.fixed(AGORA, ZoneOffset.UTC); }
+        @Bean @Primary RelogioDeTeste clockDeTeste() { return new RelogioDeTeste(); }
+
+        /** Embrulha a DataSource para registrar o SQL real. Ver {@link SqlEmitido}. */
+        @Bean
+        static BeanPostProcessor gravadorDeSql() {
+            return new BeanPostProcessor() {
+                @Override
+                public Object postProcessAfterInitialization(Object bean, String nome) {
+                    return bean instanceof DataSource original
+                            && !(bean instanceof SqlEmitido.Gravador)
+                            ? SqlEmitido.embrulhar(original)
+                            : bean;
+                }
+            };
+        }
     }
 }

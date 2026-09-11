@@ -214,6 +214,45 @@ próprio do serviço de notificação, que nenhum requisito atual pede.
 Rollback operacional: parar o consumidor e preservar banco, fila, DLQ, agenda e auditoria.
 Não apagar marcas processadas — uma versão corrigida retoma sem duplicar efeito.
 
+### Lembrete D-1 (M07)
+
+A varredura lê a `agenda_local` com **um único comando**: consultas `AGENDADA` ou `CONFIRMADA`
+com horário em `(agora, agora + 24h]` — estritamente no futuro e até 24 horas à frente,
+inclusive — e ainda sem lembrete. `agora` vem do `Clock` injetado, e os dois limites vão como
+parâmetros: o relógio do banco não participa. `CANCELADA` e `REALIZADA` nunca são lembradas, o
+que só é possível porque o consumo atualiza o status em vez de apagar a linha. O índice
+`agenda_local(status, data_hora)` sustenta o recorte, e o plano do comando real é medido em
+teste com massa representativa.
+
+Cada candidato é lembrado em transação própria, com a **reserva antes do envio**: o registro
+`LEMBRETE_D1` entra em `notificacao_enviada` por `INSERT ... ON CONFLICT DO NOTHING` sobre a
+unicidade parcial `notificacao_enviada(consulta_id) WHERE tipo = 'LEMBRETE_D1'`, e só então o
+sender é chamado. Duas execuções concorrentes — o job e o disparo manual, ou duas instâncias —
+disputam a mesma chave: a segunda espera a primeira e, se ela confirmou, não envia. A unicidade
+vale durante toda a vida da consulta, então uma remarcação posterior não gera segundo lembrete —
+o aviso reativo de alteração informa o novo horário. A unicidade é parcial porque as
+notificações reativas repetem tipo legitimamente. `LEMBRETE_D1` é tipo local do registro, fora
+de `TipoEvento`, das routing keys e da topologia.
+
+Falha do sender reverte só aquela consulta, que continua elegível na execução seguinte; as
+demais seguem, e a resposta conta só os lembretes confirmados. Falha na leitura inicial dos
+candidatos propaga: o job registra o erro e tenta na hora seguinte, e o endpoint responde 500
+em Problem Detail `https://hospital.fiap.br/erros/erro-interno`, com `correlationId`,
+`timestamp` e `instance`, sem SQL nem exceção na resposta. O tratador é restrito ao controller do
+lembrete e relança `AccessDeniedException` e `AuthenticationException`, para que 401 e 403
+continuem saindo de `RespostaDeSeguranca`.
+
+O job `@Scheduled` roda no início de cada hora (`notificacao.lembrete.cron`, padrão
+`0 0 * * * *`), habilitado por padrão e **ausente** no profile `test`. `POST
+/internal/lembretes/executar` dispara o mesmo caso de uso, restrito a MEDICO e ENFERMEIRO:
+o serviço consome a cadeia de `shared-security` com `/internal/**` como caminho autenticado, e
+a célula de cada perfil está na matriz de `docs/02-especificacao-funcional.md` §3. O texto do
+lembrete formata o horário em `America/Sao_Paulo`, o fuso em que o agendamento deriva a data.
+
+**Garantia:** no máximo um lembrete **persistido** por consulta. O **envio externo** continua
+ao-menos-uma-vez numa janela: se o sender conclui e a confirmação falha, não fica registro, e a
+execução seguinte reenvia.
+
 ## 6. historico-service
 
 Read model puro. Não aceita escrita por HTTP exceto a correção de registro pelo médico (RF-13).

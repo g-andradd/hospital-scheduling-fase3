@@ -257,6 +257,8 @@ manual para demonstração, protegido por perfil, e testes com Clock fixo cobrin
 as bordas da janela.
 ```
 
+**➜ Ao fim deste change: abrir `release/0.2.0`.** Na ordem revisada depois do M05, o M07 é o último change da release.
+
 ---
 
 ### M08 · `add-historico-projection`
@@ -315,8 +317,6 @@ Ler docs/01-arquitetura.md seção 6 e docs/02-especificacao-funcional.md seçã
 (tabela do historico-service). Capability historico-de-consultas. Cada linha da
 tabela de autorização vira um Scenario e um teste.
 ```
-
-**➜ Ao fim deste change: abrir `release/0.2.0`.**
 
 ---
 

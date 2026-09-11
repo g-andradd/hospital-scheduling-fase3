@@ -117,7 +117,7 @@ Três releases. Cada uma é uma fatia demonstrável, não um marco burocrático.
 | Versão | Fecha após | Entrega | Requisitos fechados |
 |---|---|---|---|
 | **0.1.0** | `add-autenticacao-jwt` (M04) | Agendamento seguro ponta a ponta: domínio, persistência, REST e autenticação com os três perfis | RF-01 a RF-10 |
-| **0.2.0** | `add-historico-graphql` (M09) | Arquitetura completa: eventos, notificações, lembrete D-1, histórico e GraphQL | RF-11 a RF-20 |
+| **0.2.0** | `add-lembrete-24h` (M07) | Arquitetura completa: eventos, notificações, lembrete D-1, histórico e GraphQL | RF-11 a RF-20 |
 | **1.0.0** | `finalize-audit-report` (M14) | Entrega do Tech Challenge: qualidade, ambiente, Postman, documentação e relatório | RNF-01 a RNF-10 |
 
 ### Como fechar uma release

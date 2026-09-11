@@ -2,6 +2,8 @@ package br.com.fiap.hospital.notificacao.integracao;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
@@ -14,14 +16,18 @@ import org.springframework.core.env.Environment;
 import javax.sql.DataSource;
 
 /**
- * O schema que a V1 realmente produziu.
+ * O schema que as migrations realmente produziram.
  *
- * <p>A ausencia de indice secundario e verificada tanto quanto a presenca das tabelas: o
- * M07 e que define as consultas do lembrete e medira seus proprios planos. Criar indice
- * agora seria palpite, e um palpite que ninguem mais questionaria depois de commitado.
+ * <p>A lista de indices e verificada por igualdade, e nao por inclusao: o M06 nao criou
+ * indice secundario algum, e o M07 criou exatamente os dois que as consultas do lembrete
+ * exigem, com o plano medido. Um indice "por garantia" acrescentado depois faria esta suite
+ * falhar — que e o ponto.
  */
 @DisplayName("Schema do notificacao_db")
 class SchemaNotificacaoIT extends NotificacaoITBase {
+
+    private static final Path V1 = Path.of("src", "main", "resources", "db", "migration",
+            "V1__cria_modelo_de_notificacao.sql");
 
     @Autowired Environment ambiente;
     @Autowired Flyway flyway;
@@ -60,22 +66,34 @@ class SchemaNotificacaoIT extends NotificacaoITBase {
     }
 
     /**
-     * A ausencia tambem e decisao, e por isso e verificada.
+     * A lista inteira, e nao "contem".
      *
-     * <p>Sem esta asercao alguem acrescentaria um indice "por garantia" e nada acusaria o
-     * desvio de D2 — que adia a escolha para o M07, quando existirem consultas reais para
-     * medir.
+     * <p>As PKs vem de V1 e os dois indices vem de V2, do lembrete. Qualquer outro indice e
+     * desvio de decisao — o M06 adiou a escolha para quando houvesse consultas reais para
+     * medir, e o M07 mediu as suas.
      */
     @Test
-    @DisplayName("nenhum indice secundario do M07 foi antecipado")
-    void nenhumIndiceSecundarioAntecipado() {
+    @DisplayName("os indices sao exatamente as PKs de V1 e os dois do lembrete em V2")
+    void indicesSaoAsPksDeV1EOsDoLembrete() {
         List<String> indices = jdbc.queryForList("""
                 SELECT indexname FROM pg_indexes WHERE schemaname = 'public'
                 AND tablename IN ('agenda_local', 'notificacao_enviada', 'evento_processado')
                 """, String.class);
 
         assertThat(indices).containsExactlyInAnyOrder(
-                "agenda_local_pkey", "notificacao_enviada_pkey", "evento_processado_pkey");
+                "agenda_local_pkey", "notificacao_enviada_pkey", "evento_processado_pkey",
+                "uq_notificacao_enviada_lembrete_d1", "idx_agenda_local_status_data_hora");
+    }
+
+    @Test
+    @DisplayName("V1 continua sem indice: migration aplicada e imutavel")
+    void v1ContinuaSemIndice() throws Exception {
+        Path caminho = Files.exists(V1) ? V1 : Path.of("notificacao-service").resolve(V1);
+
+        assertThat(Files.readString(caminho))
+                .as("reescrever V1 quebraria o checksum de quem ja a aplicou")
+                .doesNotContain("CREATE INDEX")
+                .doesNotContain("CREATE UNIQUE INDEX");
     }
 
     @Test
@@ -85,9 +103,11 @@ class SchemaNotificacaoIT extends NotificacaoITBase {
         try {
             var isolado = Flyway.configure().dataSource(dataSource).schemas(schema)
                     .createSchemas(true).locations("classpath:db/migration").load();
-            assertThat(isolado.migrate().migrationsExecuted).isEqualTo(1);
             assertThat(isolado.migrate().migrationsExecuted)
-                    .as("reaplicar uma migration ja aplicada nao pode executar nada")
+                    .as("V1 e V2, do zero")
+                    .isEqualTo(2);
+            assertThat(isolado.migrate().migrationsExecuted)
+                    .as("reaplicar migrations ja aplicadas nao pode executar nada")
                     .isZero();
         } finally {
             jdbc.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE");
@@ -98,23 +118,22 @@ class SchemaNotificacaoIT extends NotificacaoITBase {
     @DisplayName("Flyway conclui antes de JPA validate e do listener")
     void flywayConcluiAntesDeJpaEDoListener() {
         assertThat(ambiente.getProperty("spring.jpa.hibernate.ddl-auto")).isEqualTo("validate");
-        assertThat(flyway.info().applied()).hasSize(1);
+        assertThat(flyway.info().applied()).hasSize(2);
         // O contexto so sobe se o validate passou; o listener so existe se o contexto subiu.
         assertThat(listeners.getListenerContainers()).hasSize(1);
         assertThat(listeners.getListenerContainers().iterator().next().isRunning()).isTrue();
     }
 
     /**
-     * Nenhum endpoint <b>do servico</b>.
+     * Exatamente um endpoint <b>do servico</b>: o disparo manual do lembrete.
      *
      * <p>O {@code basicErrorController} do proprio Boot fica de fora da contagem: ele vem
-     * com o starter web, existe em todo servico da stack e nao e superficie que o M06
-     * tenha criado. Exigir zero controllers no contexto inteiro seria uma asercao sobre o
-     * framework, nao sobre esta change.
+     * com o starter web, existe em todo servico da stack e nao e superficie que o servico
+     * tenha criado. Qualquer controller alem do lembrete precisa de decisao propria.
      */
     @Test
-    @DisplayName("o servico nao expoe endpoint novo")
-    void servicoNaoExpoeEndpointNovo() {
+    @DisplayName("o servico expoe exatamente o controller do lembrete")
+    void servicoExpoeSoOControllerDoLembrete() {
         var controllers = java.util.stream.Stream.concat(
                         java.util.Arrays.stream(contexto.getBeanNamesForAnnotation(
                                 org.springframework.web.bind.annotation.RestController.class)),
@@ -127,8 +146,8 @@ class SchemaNotificacaoIT extends NotificacaoITBase {
                 .toList();
 
         assertThat(controllers)
-                .as("o M06 e um consumidor: endpoint HTTP so no M07")
-                .isEmpty();
+                .as("o M07 acrescenta so o disparo manual do lembrete")
+                .containsExactly("lembreteController");
     }
 
     private List<String> colunasDe(String tabela) {
