@@ -1,0 +1,75 @@
+"Instante em ISO-8601 com deslocamento, como no contrato de eventos."
+scalar DateTime
+
+"Recorte temporal relativo ao instante atual."
+enum PeriodoFiltro {
+  TODAS
+  FUTURAS
+  PASSADAS
+}
+
+"Os mesmos quatro status do contrato de eventos. Nao ha valor local."
+enum StatusConsulta {
+  AGENDADA
+  CONFIRMADA
+  CANCELADA
+  REALIZADA
+}
+
+"""
+Recorte da leitura. Periodo, intervalo e status sao combinados por conjuncao;
+a lista de status casa por pertencimento e, vazia ou ausente, nao restringe.
+"""
+input FiltroConsulta {
+  periodo: PeriodoFiltro
+  status: [StatusConsulta!]
+  "Inclusivo."
+  de: DateTime
+  "Exclusivo."
+  ate: DateTime
+}
+
+"Snapshot atual da consulta, como o historico o projetou."
+type ConsultaHistorico {
+  id: ID!
+  pacienteId: ID!
+  pacienteNome: String!
+  medicoId: ID!
+  medicoNome: String!
+  especialidade: String!
+  dataHora: DateTime!
+  status: StatusConsulta!
+  observacoes: String
+  criadoEm: DateTime!
+  atualizadoEm: DateTime!
+}
+
+"""
+Correcao de registro pelo medico.
+
+`consultaId` seleciona o alvo e nao tem contraparte corrigivel: nao existe campo para
+um novo id, nem para pacienteId ou medicoId. O autor tambem nao entra aqui — vem do
+token. Campo ausente significa "nao corrigir"; nulo explicito so e aceito em
+`observacoes`, onde significa limpar o registro.
+"""
+input CorrigirRegistroHistoricoInput {
+  consultaId: ID!
+  justificativa: String!
+  pacienteNome: String
+  medicoNome: String
+  especialidade: String
+  dataHora: DateTime
+  status: StatusConsulta
+  observacoes: String
+}
+
+type Query {
+  consultasDoPaciente(pacienteId: ID!, filtro: FiltroConsulta): [ConsultaHistorico!]!
+  minhasConsultas(filtro: FiltroConsulta): [ConsultaHistorico!]!
+  consultasDoMedico(medicoId: ID!, filtro: FiltroConsulta): [ConsultaHistorico!]!
+  consulta(id: ID!): ConsultaHistorico
+}
+
+type Mutation {
+  corrigirRegistroHistorico(input: CorrigirRegistroHistoricoInput!): ConsultaHistorico!
+}

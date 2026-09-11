@@ -68,7 +68,9 @@ public abstract class ConsultaRepositoryContractTest {
 
         @Test
         @DisplayName("Scenario: Consulta registrada sobrevive ao reinicio")
-        void consultaGravadaERecuperadaIntegralmente() {
+        
+    // Scenario: Consulta registrada sobrevive ao reinício
+    void consultaGravadaERecuperadaIntegralmente() {
             Consulta gravada = gravar(pacienteId(), medicoId(), daquiA(24), StatusConsulta.AGENDADA);
 
             Consulta lida = repositorio().buscarPorId(gravada.id()).orElseThrow();
@@ -76,14 +78,16 @@ public abstract class ConsultaRepositoryContractTest {
             assertThat(lida.id()).isEqualTo(gravada.id());
             assertThat(lida.pacienteId()).isEqualTo(pacienteId());
             assertThat(lida.medicoId()).isEqualTo(medicoId());
-            assertThat(lida.periodo().inicio()).isEqualTo(daquiA(24));
+            assertThat(lida.periodo().inicio().toInstant()).isEqualTo(daquiA(24).toInstant());
             assertThat(lida.periodo().duracaoMinutos()).isEqualTo(30);
             assertThat(lida.status()).isEqualTo(StatusConsulta.AGENDADA);
         }
 
         @Test
         @DisplayName("Scenario: Mudanca de estado e persistida")
-        void mudancaDeEstadoEPersistida() {
+        
+    // Scenario: Mudança de estado é persistida
+    void mudancaDeEstadoEPersistida() {
             Consulta gravada = gravar(pacienteId(), medicoId(), daquiA(24), StatusConsulta.AGENDADA);
 
             Consulta carregada = repositorio().buscarPorId(gravada.id()).orElseThrow();
@@ -97,7 +101,9 @@ public abstract class ConsultaRepositoryContractTest {
 
         @Test
         @DisplayName("Scenario: Operacao recusada nao deixa registro")
-        void operacaoRecusadaNaoDeixaRegistro() {
+        
+    // Scenario: Operação recusada não deixa registro
+    void operacaoRecusadaNaoDeixaRegistro() {
             Consulta gravada = gravar(pacienteId(), medicoId(), daquiA(24), StatusConsulta.AGENDADA);
 
             // Muta o objeto de dominio e NAO chama salvar, simulando uma operacao que
@@ -112,7 +118,9 @@ public abstract class ConsultaRepositoryContractTest {
 
         @Test
         @DisplayName("Scenario: Consulta gravada no passado e recuperavel")
-        void consultaNoPassadoERecuperavel() {
+        
+    // Scenario: Consulta gravada no passado é recuperável
+    void consultaNoPassadoERecuperavel() {
             Consulta antiga = gravar(
                     pacienteId(), medicoId(), AGORA.minusMonths(3), StatusConsulta.REALIZADA);
 
@@ -195,7 +203,9 @@ public abstract class ConsultaRepositoryContractTest {
 
         @Test
         @DisplayName("Scenario: Busca de conflito e delimitada na origem")
-        void buscaEDelimitadaNaOrigem() {
+        
+    // Scenario: Busca de conflito é delimitada na origem
+    void buscaEDelimitadaNaOrigem() {
             for (int hora = 1; hora <= 20; hora++) {
                 gravar(outroPacienteId(), medicoId(), daquiA(hora * 2L), StatusConsulta.AGENDADA);
             }

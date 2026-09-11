@@ -11,15 +11,17 @@ Cada item é **uma change do OpenSpec** e **uma feature branch**. O `change-id` 
 ## Sequência e paralelismo
 
 ```
-M00 ─► M01 ─► M02 ─► M03 ─► M04 ─►│ release/0.1.0 │
-                                   │
-                                   ├─► M05 ─┬─► M06 ─► M07 ─┐
-                                   │        └─► M08 ─► M09 ─┤─► release/0.2.0
-                                   │                        │
-                                   └────────────────────────┴─► M10 ─► M11 ─► M12 ─► M13 ─► M14 ─► release/1.0.0
+M00 ─► M01 ─► M02 ─► M03 ─► M04 ─►│ release/0.1.0 │─► M05 ─► M08 ─► M09 ─► M06 ─► M07 ─►│ release/0.2.0 │
+                                                                                              │
+                                   ┌──────────────────────────────────────────────────────────┘
+                                   └─► M10 ─► M11 ─► M12 ─► M13 ─► M14 ─►│ release/1.0.0 │
 ```
 
-M06/M07 e M08/M09 são paralelizáveis depois do M05. Duas sessões do Claude Code em duas feature branches — é aqui que se ganha tempo.
+**Ordem revisada depois do M05.** O roadmap original previa M06→M07→M08→M09, com os dois pares paralelizáveis. Duas decisões mudaram isso:
+
+**Sem paralelismo.** Há um único implementador. Duas branches simultâneas com um só agente viram alternância de contexto, conflito em `openspec/changes/` e auditoria dupla — o ganho de tempo é ilusório.
+
+**M08 e M09 vêm antes.** O GraphQL é o segundo item mais avaliado do enunciado, depois da segurança, e é o maior risco técnico restante. Tirá-lo da frente enquanto há folga de prazo vale mais do que a curva de aprendizado suave que a ordem original oferecia. Como consequência, se o prazo apertar no fim, o corte cai no M07 — que já estava marcado como cortável — e não numa entrega avaliada.
 
 ---
 
@@ -255,6 +257,8 @@ manual para demonstração, protegido por perfil, e testes com Clock fixo cobrin
 as bordas da janela.
 ```
 
+**➜ Ao fim deste change: abrir `release/0.2.0`.** Na ordem revisada depois do M05, o M07 é o último change da release.
+
 ---
 
 ### M08 · `add-historico-projection`
@@ -313,8 +317,6 @@ Ler docs/01-arquitetura.md seção 6 e docs/02-especificacao-funcional.md seçã
 (tabela do historico-service). Capability historico-de-consultas. Cada linha da
 tabela de autorização vira um Scenario e um teste.
 ```
-
-**➜ Ao fim deste change: abrir `release/0.2.0`.**
 
 ---
 

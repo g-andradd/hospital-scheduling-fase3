@@ -46,7 +46,7 @@ class SchemaVersionadoIT {
                         "SELECT version FROM flyway_schema_history WHERE success = true "
                                 + "ORDER BY installed_rank DESC LIMIT 1")
                 .getSingleResult();
-        assertThat(versao).isEqualTo("1");
+        assertThat(versao).isEqualTo("3");
     }
 
     @Test

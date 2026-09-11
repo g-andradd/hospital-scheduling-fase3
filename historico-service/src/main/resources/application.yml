@@ -2,5 +2,91 @@ spring:
   application:
     name: historico-service
 
+  datasource:
+    url: ${HISTORICO_DB_URL:jdbc:postgresql://localhost:5432/historico_db}
+    username: ${HISTORICO_DB_USER:hospital}
+    password: ${HISTORICO_DB_PASSWORD:hospital}
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+  flyway:
+    locations: classpath:db/migration
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:hospital}
+    password: ${RABBITMQ_PASSWORD:hospital}
+    connection-timeout: 2s
+    channel-rpc-timeout: 2s
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+    cache:
+      channel:
+        checkout-timeout: 2s
+    listener:
+      simple:
+        acknowledge-mode: auto
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1000ms
+          multiplier: 2.0
+          max-interval: 10000ms
+
+  graphql:
+    schema:
+      locations: classpath:graphql/
+    graphiql:
+      # Padrao desabilitado. Os profiles dev e demo ligam a interface E liberam o caminho:
+      # ligar sem liberar deixaria a pagina montada atras do denyAll, e liberar sem ligar
+      # abriria um caminho que nao serve para nada.
+      enabled: false
+
+hospital:
+  jwt:
+    # O historico nao emite token; valida o mesmo segredo dos demais servicos.
+    secret: ${JWT_SECRET:troque-este-segredo-por-um-valor-aleatorio-de-no-minimo-32-bytes}
+    expiracao: PT8H
+    emissor: hospital-agendamento
+  security:
+    caminhos:
+      # /graphql exige token em qualquer profile; o perfil e decidido no resolver.
+      autenticados: /api/**,/graphql
+
 server:
   port: 8083
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  graphql:
+    graphiql:
+      enabled: true
+hospital:
+  security:
+    caminhos:
+      autenticados: /api/**,/graphql
+      publicos-adicionais: /graphiql,/graphiql/**
+
+---
+spring:
+  config:
+    activate:
+      on-profile: demo
+  graphql:
+    graphiql:
+      enabled: true
+hospital:
+  security:
+    caminhos:
+      autenticados: /api/**,/graphql
+      publicos-adicionais: /graphiql,/graphiql/**

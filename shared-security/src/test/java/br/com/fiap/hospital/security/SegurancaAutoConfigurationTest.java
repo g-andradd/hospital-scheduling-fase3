@@ -3,6 +3,9 @@ package br.com.fiap.hospital.security;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.Filter;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.http.HttpServletResponse;
 import java.time.Clock;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -14,6 +17,8 @@ import org.springframework.boot.autoconfigure.web.servlet.WebMvcAutoConfiguratio
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.ExceptionTranslationFilter;
@@ -24,9 +29,9 @@ import org.springframework.security.web.csrf.CsrfFilter;
 /**
  * A cadeia montada no proprio modulo, sem subir servico algum.
  *
- * <p>Hoje so o agendamento consome esta auto-configuracao, entao toda a evidencia de que
- * ela funciona viria dos testes de integracao <b>de outro modulo</b>. Isso e frágil em
- * duas direcoes: o {@code shared-security} pode ser reusado por um servico que nao tenha
+ * <p>Tres servicos consomem esta auto-configuracao — agendamento, historico e notificacao —,
+ * e sem estes testes toda a evidencia de que ela funciona viria dos testes de integracao
+ * <b>de outros modulos</b>. Isso e frágil em duas direcoes: o {@code shared-security} pode ser reusado por um servico que nao tenha
  * essa suite, e uma quebra aqui apareceria como falha longe da causa.
  */
 @DisplayName("SegurancaAutoConfiguration")
@@ -137,6 +142,155 @@ class SegurancaAutoConfigurationTest {
             assertThat(tradutor).isNotNull();
             assertThat(ctx).hasSingleBean(RespostaDeSeguranca.class);
         });
+    }
+
+    /**
+     * O padrao existe para que o agendamento nao mude quando o historico precisa de mais.
+     *
+     * <p>Se o padrao dos caminhos autenticados deixasse de ser {@code /api/**}, ou se a
+     * lista publica adicional nascesse com algo dentro, um servico que nao configurou nada
+     * passaria a expor ou a negar caminho sem que ninguem tivesse pedido — e a mudanca
+     * apareceria como falha de outro modulo, longe da causa.
+     */
+    @Test
+    @DisplayName("sem configuracao, os caminhos sao exatamente os de antes")
+    void padraoPreservaACadeiaAnterior() {
+        contexto.run(ctx -> {
+            CaminhosDeSeguranca caminhos = ctx.getBean(CaminhosDeSeguranca.class);
+
+            assertThat(caminhos.autenticados()).containsExactly("/api/**");
+            assertThat(caminhos.publicosAdicionais())
+                    .as("publico adicional nasce vazio: quem abre caminho e o servico, por profile")
+                    .isEmpty();
+            assertThat(ctx).hasSingleBean(SecurityFilterChain.class);
+        });
+    }
+
+    @Test
+    @DisplayName("o servico acrescenta caminhos sem ganhar uma segunda cadeia")
+    void servicoAcrescentaCaminhosSemSegundaCadeia() {
+        contexto.withPropertyValues(
+                        "hospital.security.caminhos.autenticados=/api/**,/graphql",
+                        "hospital.security.caminhos.publicos-adicionais=/graphiql**")
+                .run(ctx -> {
+                    CaminhosDeSeguranca caminhos = ctx.getBean(CaminhosDeSeguranca.class);
+
+                    assertThat(caminhos.autenticados()).containsExactly("/api/**", "/graphql");
+                    assertThat(caminhos.publicosAdicionais()).containsExactly("/graphiql**");
+                    assertThat(ctx)
+                            .as("caminho novo entra por configuracao; cadeia concorrente "
+                                    + "faria a ordem decidir quem atende /graphql")
+                            .hasSingleBean(SecurityFilterChain.class);
+                });
+    }
+
+    /**
+     * A recusa por omissao continua sendo o padrao.
+     *
+     * <p>Tornar a lista configuravel poderia ter trocado {@code denyAll} por
+     * "autenticado", e a diferenca so apareceria no dia em que alguem criasse um caminho
+     * novo — que passaria a responder a qualquer usuario logado em vez de nao existir.
+     */
+    @Test
+    @DisplayName("caminho fora das listas continua caindo no denyAll")
+    void caminhoForaDasListasContinuaNegado() throws Exception {
+        contexto.withPropertyValues("hospital.security.caminhos.autenticados=/api/**,/graphql")
+                .run(ctx -> {
+                    MockHttpServletRequest requisicao =
+                            new MockHttpServletRequest("GET", "/caminho-que-ninguem-liberou");
+                    MockHttpServletResponse resposta = new MockHttpServletResponse();
+
+                    filtrar(ctx.getBean(SecurityFilterChain.class), requisicao, resposta);
+
+                    assertThat(resposta.getStatus())
+                            .as("sem denyAll, caminho novo ficaria aberto a qualquer autenticado")
+                            .isEqualTo(HttpServletResponse.SC_UNAUTHORIZED);
+                });
+    }
+
+    /**
+     * O terceiro consumidor, a notificacao, troca a lista autenticada por {@code /internal/**}.
+     *
+     * <p>Com token valido, {@code /internal} atravessa a cadeia ate o alvo, e {@code /api} —
+     * que deixou de estar na lista — cai no {@code denyAll}. A prova usa token de proposito:
+     * sem ele, os dois caminhos devolveriam 401 e a diferenca entre "autenticado" e "negado
+     * por omissao" ficaria invisivel.
+     */
+    @Test
+    @DisplayName("a notificacao autentica /internal/** sem segunda cadeia, e /api/** substituido e negado")
+    void notificacaoAutenticaInternalSemSegundaCadeia() {
+        contexto.withPropertyValues("hospital.security.caminhos.autenticados=/internal/**")
+                .run(ctx -> {
+                    assertThat(ctx).hasSingleBean(SecurityFilterChain.class);
+                    assertThat(ctx.getBean(CaminhosDeSeguranca.class).autenticados())
+                            .containsExactly("/internal/**");
+
+                    SecurityFilterChain cadeia = ctx.getBean(SecurityFilterChain.class);
+                    String token = ctx.getBean(JwtService.class).emitir(new UsuarioAutenticado(
+                            java.util.UUID.randomUUID(), "medico@hospital.com", "MEDICO", null,
+                            java.util.UUID.randomUUID()));
+
+                    MockHttpServletResponse interna = new MockHttpServletResponse();
+                    assertThat(alcancaOAlvo(cadeia,
+                            comToken("POST", "/internal/lembretes/executar", token), interna))
+                            .as("/internal/** autenticado deixa a requisicao seguir ate o metodo")
+                            .isTrue();
+
+                    MockHttpServletResponse api = new MockHttpServletResponse();
+                    assertThat(alcancaOAlvo(cadeia, comToken("GET", "/api/v1/consultas", token), api))
+                            .as("/api/** saiu da lista e nao pode alcancar handler algum")
+                            .isFalse();
+                    assertThat(api.getStatus()).isEqualTo(HttpServletResponse.SC_FORBIDDEN);
+                });
+    }
+
+    private static MockHttpServletRequest comToken(String metodo, String caminho, String token) {
+        MockHttpServletRequest requisicao = new MockHttpServletRequest(metodo, caminho);
+        // Com o DispatcherServlet mapeado em "/", o container poe o caminho inteiro no
+        // servletPath, e e dele que o matcher de caminhos le. Sem isto o caminho seria vazio
+        // e toda requisicao cairia no denyAll, casando ou nao com a lista.
+        requisicao.setServletPath(caminho);
+        requisicao.addHeader("Authorization", "Bearer " + token);
+        return requisicao;
+    }
+
+    /** Como {@link #filtrar}, mas informando se a requisicao chegou ao fim da cadeia. */
+    private static boolean alcancaOAlvo(SecurityFilterChain cadeia, MockHttpServletRequest requisicao,
+                                        MockHttpServletResponse resposta) throws Exception {
+        var alcancou = new java.util.concurrent.atomic.AtomicBoolean();
+        List<Filter> filtros = cadeia.getFilters();
+        FilterChain atual = (req, res) -> alcancou.set(true);
+        for (int i = filtros.size() - 1; i >= 0; i--) {
+            Filter filtro = filtros.get(i);
+            FilterChain proxima = atual;
+            atual = (req, res) -> filtro.doFilter(req, res, proxima);
+        }
+        try {
+            atual.doFilter(requisicao, resposta);
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+        return alcancou.get();
+    }
+
+    /**
+     * Roda a requisicao pela cadeia real, do primeiro filtro ao ultimo.
+     *
+     * <p>O fim da cadeia e um alvo que registra que foi alcancado. Se a autorizacao
+     * deixasse a requisicao passar, o teste veria 200 com {@code alcancou} verdadeiro em
+     * vez de 401 — a diferenca entre "negado" e "seguiu adiante sem handler".
+     */
+    private static void filtrar(SecurityFilterChain cadeia, MockHttpServletRequest requisicao,
+                                MockHttpServletResponse resposta) throws Exception {
+        List<Filter> filtros = cadeia.getFilters();
+        FilterChain alvo = (req, res) -> { };
+        FilterChain atual = alvo;
+        for (int i = filtros.size() - 1; i >= 0; i--) {
+            Filter filtro = filtros.get(i);
+            FilterChain proxima = atual;
+            atual = (req, res) -> filtro.doFilter(req, res, proxima);
+        }
+        atual.doFilter(requisicao, resposta);
     }
 
     private static List<Class<?>> tiposDosFiltros(SecurityFilterChain cadeia) {

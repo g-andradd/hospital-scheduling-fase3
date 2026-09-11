@@ -10,7 +10,7 @@ Cada requisito tem um id. Todo PR deve citar os ids que fecha. A auditoria final
 | `agendamento-de-consultas` | RF-05 a RF-10, RNF-03, RNF-09, RNF-10 |
 | `mensageria-de-eventos` | RF-15, RF-20 |
 | `notificacoes-ao-paciente` | RF-16, RF-17, RF-19 |
-| `historico-de-consultas` | RF-11 a RF-14, RF-18 |
+| `historico-de-consultas` | RF-11 a RF-14, RF-18, RF-19 |
 | `operacao-do-ambiente` | RNF-04 a RNF-08 |
 
 ## 1. Requisitos funcionais
@@ -91,10 +91,16 @@ Consolidada a partir do enunciado §1 e §2 (ver ADR-004 para a resolução da a
 | Operação | MEDICO | ENFERMEIRO | PACIENTE |
 |---|:---:|:---:|:---:|
 | `consultasDoPaciente(pacienteId:)` | ✅ qualquer | ✅ qualquer | ✅ **apenas o próprio id**, senão 403 |
-| `minhasConsultas` | ✅ | ✅ | ✅ |
+| `minhasConsultas` | ❌ 403 | ❌ 403 | ✅ **as proprias, resolvidas do token** |
 | `consultasDoMedico(medicoId:)` | ✅ | ✅ | ❌ 403 |
 | `consulta(id:)` | ✅ | ✅ | ✅ (só se for sua) |
 | `corrigirRegistroHistorico` (mutation) | ✅ | ❌ 403 | ❌ 403 |
+
+### notificacao-service — REST interno
+
+| Endpoint | Método | MEDICO | ENFERMEIRO | PACIENTE |
+|---|---|:---:|:---:|:---:|
+| `/internal/lembretes/executar` | POST | ✅ | ✅ | ❌ 403 |
 
 **Teste obrigatório:** para cada célula ✅/❌ desta matriz existe um teste de integração. É o item de segurança que a banca mais consegue verificar objetivamente.
 
@@ -108,12 +114,16 @@ paciente          (id, usuario_id FK UK, cpf UK, data_nascimento, telefone)
 medico            (id, usuario_id FK UK, crm UK, especialidade)
 consulta          (id, paciente_id FK, medico_id FK, registrado_por_id FK,
                    data_hora, duracao_minutos, status, observacoes,
-                   motivo_cancelamento, criado_em, atualizado_em, versao)
+                   motivo_cancelamento, criado_em, atualizado_em, versao, periodo_ocupado tstzrange)
 outbox_evento     (id, agregado_id, tipo_evento, payload jsonb, routing_key,
                    criado_em, publicado_em, tentativas)
 ```
 
 Índices: `consulta(medico_id, data_hora)`, `consulta(paciente_id, data_hora)`, `outbox_evento(publicado_em) WHERE publicado_em IS NULL`.
+
+No M05, periodo_ocupado é NOT NULL e derivado por trigger BEFORE INSERT OR UPDATE em UTC, inclusive para SQL direto. As constraints ex_consulta_medico_periodo e ex_consulta_paciente_periodo usam EXCLUDE USING gist, igualdade UUID via btree_gist e sobreposição de range apenas em AGENDADA/CONFIRMADA. São NOT DEFERRABLE; [início,fim) permite adjacência. V3 faz diagnóstico prévio e backfill, recusando dados ativos inconsistentes sem reparação silenciosa.
+
+Os timestamps preservam instantes, não o deslocamento original. payload do outbox contém o envelope completo, id=eventId, agregado_id=aggregateId e criado_em=occurredAt. tentativas é numeric inteiro não negativo, sem teto de 32 bits; publicado_em fica nulo até confirmação do relay. A ordenação do lote por tentativas/criado_em/id não é resolvida pelo índice parcial de publicado_em.
 
 ### notificacao_db
 
@@ -123,6 +133,8 @@ agenda_local        (consulta_id PK, paciente_id, paciente_nome, paciente_email,
 notificacao_enviada (id, consulta_id, tipo, destinatario, canal, enviado_em, conteudo)
 evento_processado   (event_id PK, processado_em)
 ```
+
+Índices (M07): `notificacao_enviada(consulta_id) WHERE tipo = 'LEMBRETE_D1'`, único e parcial — no máximo um lembrete D-1 por consulta, sem restringir as notificações reativas, que repetem tipo —, e `agenda_local(status, data_hora)`, que sustenta a varredura D-1. `LEMBRETE_D1` é tipo local do registro de envios, não evento de integração.
 
 ### historico_db
 

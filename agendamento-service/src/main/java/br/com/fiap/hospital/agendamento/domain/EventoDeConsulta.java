@@ -4,29 +4,27 @@ import java.time.OffsetDateTime;
 import java.util.Objects;
 import java.util.UUID;
 
-/**
- * Evento de dominio publicado a cada mudanca de estado de uma consulta.
- *
- * <p>Deliberadamente minimo. Nao e o envelope de docs/03-contrato-de-eventos.md — ele
- * carrega {@code eventId}, {@code correlationId}, {@code version} e o snapshot
- * completo serializado, que sao conceitos de transporte e exigiriam Jackson dentro do
- * dominio. Traduzir este evento para aquele envelope e trabalho do adaptador de
- * mensageria, no M05.
- */
-public record EventoDeConsulta(
-        UUID consultaId,
-        TipoEventoConsulta tipo,
-        OffsetDateTime ocorridoEm) {
-
+/** Valores imutaveis do fato. O envelope de transporte pertence ao adaptador. */
+public record EventoDeConsulta(UUID consultaId, TipoEventoConsulta tipo,
+        OffsetDateTime ocorridoEm, Snapshot posterior, Snapshot anterior) {
     public EventoDeConsulta {
         Objects.requireNonNull(consultaId, "O id da consulta e obrigatorio no evento");
         Objects.requireNonNull(tipo, "O tipo do evento e obrigatorio");
         Objects.requireNonNull(ocorridoEm, "O instante do evento e obrigatorio");
+        Objects.requireNonNull(posterior, "O estado posterior e obrigatorio");
     }
-
-    /** Constroi o evento a partir do estado da consulta apos a mudanca. */
     public static EventoDeConsulta de(Consulta consulta, TipoEventoConsulta tipo) {
+        return de(consulta,tipo,null);
+    }
+    public static EventoDeConsulta de(Consulta consulta, TipoEventoConsulta tipo, Snapshot anterior) {
         Objects.requireNonNull(consulta, "A consulta e obrigatoria no evento");
-        return new EventoDeConsulta(consulta.id(), tipo, consulta.atualizadoEm());
+        return new EventoDeConsulta(consulta.id(),tipo,consulta.atualizadoEm(),Snapshot.de(consulta),anterior);
+    }
+    public record Snapshot(UUID pacienteId, UUID medicoId, UUID registradoPorId,
+            PeriodoConsulta periodo, StatusConsulta status, String observacoes, String motivoCancelamento) {
+        public static Snapshot de(Consulta c) {
+            return new Snapshot(c.pacienteId(),c.medicoId(),c.registradoPorId(),c.periodo(),c.status(),
+                    c.observacoes(),c.motivoCancelamento());
+        }
     }
 }

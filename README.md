@@ -25,7 +25,8 @@ flowchart LR
 
     C -->|REST| A
     C -->|GraphQL| H
-    A -->|publica| R
+    A -->|mesma transação| O[(PostgreSQL: consulta + outbox)]
+    O -->|relay at-least-once| R
     R -->|consulta.#| N
     R -->|consulta.#| H
     N --> M[Log / SMTP → Mailpit]
@@ -198,7 +199,7 @@ curl -s -X POST http://localhost:8081/auth/login \
   -d '{"email":"medico@hospital.com","senha":"Senha@123"}'
 ```
 
-A resposta traz `token`, `expiraEmSegundos` e `perfil`. Use o token como `Bearer` nas
+A resposta traz `accessToken`, `expiresIn` e `perfil`. Use o `accessToken` como `Bearer` nas
 demais chamadas:
 
 ```bash
@@ -277,9 +278,180 @@ Cada uma das 15 changes do roadmap segue o ciclo `/opsx:propose` → revisão hu
 | Release | Fecha após | Entrega |
 |---|---|---|
 | `v0.1.0` | M04 | Agendamento seguro ponta a ponta |
-| `v0.2.0` | M09 | Mensageria, notificações e histórico GraphQL |
+| `v0.2.0` | M07 | Mensageria, notificações, histórico e lembrete D-1 |
 | `v1.0.0` | M14 | Entrega do Tech Challenge |
 
 ## Licença
 
 MIT
+
+## Consulta do histórico por GraphQL (M09)
+
+O endpoint é `POST /graphql` e **exige token** — o mesmo JWT emitido por
+`POST /auth/login` no agendamento. O histórico não tem login próprio.
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8081/auth/login   -H 'Content-Type: application/json'   -d '{"email":"medico@hospital.com","senha":"Senha@123"}' | jq -r .accessToken)
+```
+
+Consultas disponíveis: `consultasDoPaciente(pacienteId:, filtro:)`,
+`consultasDoMedico(medicoId:, filtro:)`, `consulta(id:)` e `minhasConsultas(filtro:)` —
+esta última exclusiva do perfil PACIENTE, que resolve a identidade do token e não aceita
+identificador como argumento.
+
+```bash
+curl -s -X POST http://localhost:8083/graphql   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json'   -d '{"query":"query($p:ID!){ consultasDoPaciente(pacienteId:$p, filtro:{periodo:FUTURAS, status:[AGENDADA,CONFIRMADA]}) { id dataHora status medicoNome } }","variables":{"p":"<pacienteId>"}}'
+```
+
+O filtro combina período, intervalo e status por AND. `TODAS` não recorta pelo relógio;
+`FUTURAS` é `dataHora >= agora` e `PASSADAS` é `dataHora < agora`; o intervalo é `[de, ate)`,
+com `de` inclusivo e `ate` exclusivo. Lista de status vazia não restringe. O resultado vem
+ordenado por `dataHora` e, no empate, por `id`.
+
+A correção de registro é exclusiva de MEDICO:
+
+```bash
+curl -s -X POST http://localhost:8083/graphql   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json'   -d '{"query":"mutation($in:CorrigirRegistroHistoricoInput!){ corrigirRegistroHistorico(input:$in){ id status observacoes atualizadoEm } }","variables":{"in":{"consultaId":"<id>","justificativa":"status registrado por engano","status":"AGENDADA"}}}'
+```
+
+`consultaId` apenas seleciona o registro. **Não existem** campos para autor, `pacienteId`
+ou `medicoId`: o autor vem do token, e os identificadores não são corrigíveis — enviá-los é
+recusado com `BAD_REQUEST` antes de a operação executar. Campo ausente não corrige; nulo
+explícito só é aceito em `observacoes`, onde limpa o registro. Toda correção grava, na mesma
+transação, uma linha `CORRECAO_MANUAL` em `consulta_evento` com médico autor, justificativa e
+os valores antes e depois — se a auditoria falhar, a correção não vale.
+
+Erros saem com código estável em `extensions.code`: `FORBIDDEN`, `NOT_FOUND` e `BAD_REQUEST`.
+Falha inesperada devolve mensagem genérica, sem SQL nem stack trace.
+
+**GraphiQL** responde em `/graphiql` apenas nos profiles `dev` e `demo`; no profile padrão a
+interface fica desabilitada e o caminho é negado pela cadeia de segurança.
+
+## Operação das notificações (M06)
+
+O `notificacao-service` consome `notificacao.consultas` e, na mesma transação, atualiza a
+`agenda_local`, envia a notificação reativa quando aplicável e grava a auditoria, marcando o
+`eventId` por último. Criação, atualização e cancelamento notificam; confirmação e realização
+apenas atualizam a agenda. Fato com `occurredAt` anterior ao já aplicado é marcado como
+processado sem regredir a agenda nem enviar aviso desatualizado.
+
+O canal de envio é escolhido por `NOTIFICACAO_SENDER`, com padrão `log` — sem configuração,
+nenhum provedor externo é contactado. O adaptador SMTP lê `SMTP_HOST`, `SMTP_PORT` e
+`NOTIFICACAO_REMETENTE` do ambiente; não há credencial no repositório.
+
+**Garantia:** o efeito persistido é exatamente-uma-vez por `eventId`. O envio externo é
+ao-menos-uma-vez: existe uma janela em que o canal recebe a mensagem e a transação reverte.
+Por isso `notificacao_enviada` registra o que transações confirmadas produziram, e não todo
+envio realizado — não use essa tabela como prova absoluta de que um paciente foi avisado.
+
+Rollback: parar o consumidor e preservar banco, fila, DLQ, agenda e auditoria; retomar após a
+correção, sem apagar marcas processadas.
+
+## Lembrete D-1 (M07)
+
+O `notificacao-service` avisa o paciente na véspera. A varredura D-1 lê a `agenda_local` e
+lembra cada consulta `AGENDADA` ou `CONFIRMADA` cujo horário esteja em `(agora, agora + 24h]` —
+estritamente no futuro e até 24 horas à frente, inclusive. `CANCELADA` e `REALIZADA` nunca
+recebem lembrete. O horário no texto sai no fuso `America/Sao_Paulo`.
+
+**Cadência.** Um job executa a varredura no início de cada hora. A expressão vem de
+`NOTIFICACAO_LEMBRETE_CRON` (cron do Spring, padrão `0 0 * * * *`), e
+`NOTIFICACAO_LEMBRETE_AGENDADOR_HABILITADO=false` desliga o job sem desligar o consumidor nem o
+endpoint. No profile `test` o job não existe.
+
+**Um lembrete por consulta, durante toda a vida dela.** A regra é garantida por unicidade no
+PostgreSQL, com a reserva do registro feita antes do envio: execuções concorrentes — o job e o
+disparo manual, ou duas instâncias — entregam um único lembrete. Consulta remarcada depois de
+lembrada **não** recebe outro; o aviso de alteração do M06 informa o novo horário. Se o canal
+falhar, nada fica registrado e a próxima execução tenta de novo, e a falha de uma consulta não
+impede as demais.
+
+**Garantia:** o efeito persistido é no máximo um lembrete por consulta. O envio externo é
+ao-menos-uma-vez numa janela: se o canal recebe a mensagem e a confirmação da transação falha,
+a execução seguinte reenvia.
+
+### Disparo manual
+
+`POST /internal/lembretes/executar` executa a varredura na hora — é o que permite demonstrar o
+lembrete sem esperar a hora cheia. Exige o mesmo JWT emitido por `POST /auth/login` no
+agendamento.
+
+| Situação | Resposta |
+|---|---|
+| MEDICO ou ENFERMEIRO | `200` com `{"lembretesEnviados": n}`, inclusive `0` |
+| PACIENTE | `403` em Problem Detail, `type` `acesso-negado` |
+| Token ausente, expirado ou inválido | `401` em Problem Detail, `type` `nao-autenticado` |
+| Banco indisponível na leitura dos candidatos | `500` em Problem Detail, `type` `erro-interno`, com `correlationId` |
+
+A célula de cada perfil está na matriz normativa de
+[docs/02-especificacao-funcional.md](docs/02-especificacao-funcional.md) §3, e os testes a leem
+de lá.
+
+### Demonstração
+
+O token é assinado pelo agendamento e validado pela notificação com o mesmo segredo. O
+`notificacao-service` **não sobe sem `JWT_SECRET`** — não há valor padrão —, e nem o Maven nem
+o Spring leem o `.env`. Exporte as variáveis em **cada** sessão de shell que sobe um serviço:
+
+```bash
+set -a; . ./.env; set +a
+```
+
+No primeiro terminal, o agendamento com os usuários de demonstração:
+
+```bash
+SPRING_PROFILES_ACTIVE=demo mvn -pl agendamento-service -am spring-boot:run
+```
+
+No segundo terminal, depois do mesmo `set -a; . ./.env; set +a`:
+
+```bash
+mvn -pl notificacao-service -am spring-boot:run
+```
+
+Crie uma consulta para as próximas 24 horas por `POST /api/v1/consultas` (ver
+[Usar a API](#usar-a-api)); o evento chega à agenda local da notificação. Então dispare:
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8081/auth/login -H 'Content-Type: application/json' -d '{"email":"medico@hospital.com","senha":"Senha@123"}' | jq -r .accessToken)
+```
+
+```bash
+curl -s -X POST http://localhost:8082/internal/lembretes/executar -H "Authorization: Bearer $TOKEN"
+```
+
+A resposta é `{"lembretesEnviados":1}`, e o lembrete aparece no log da notificação — ou no
+servidor SMTP, com `NOTIFICACAO_SENDER=smtp`. Um segundo disparo responde `0`: a consulta já foi
+lembrada.
+
+## Rollback do histórico (M08)
+
+Para rollback, parar o consumidor do histórico e preservar banco, filas, DLQ, trilha e marcas de processamento. Após a correção, retomar o consumidor; não apagar evidências nem reenviar mensagens confirmadas.
+
+## Operação dos eventos de consulta (M05)
+
+O agendamento grava consulta e envelope na mesma transação. O relay publica lotes de até 50 a cada 1s após a conclusão do lote anterior. O histórico projeta os eventos em seu read model com idempotência transacional e trilha completa; a notificação mantém a agenda local e avisa o paciente.
+
+Os três serviços leem RABBITMQ_HOST (localhost ao executar na máquina; rabbitmq na rede Compose), RABBITMQ_PORT, RABBITMQ_USER e RABBITMQ_PASSWORD. As propriedades de consumo exigem default-requeue-rejected=false e três tentativas totais, com pausas de 1s e 2s. A topologia é declarada na primeira conexão ao broker. Testes desabilitam o scheduler e acionam o relay explicitamente.
+
+Uma falha de publicação mantém a linha pendente, sem teto de tentativas. Diagnóstico no agendamento_db:
+
+```sql
+SELECT count(*) AS pendentes, min(criado_em) AS fato_mais_antigo,
+       max(tentativas) AS maior_numero_de_falhas
+FROM outbox_evento WHERE publicado_em IS NULL;
+
+SELECT id, tipo_evento, criado_em, tentativas
+FROM outbox_evento WHERE publicado_em IS NULL
+ORDER BY tentativas, criado_em, id LIMIT 50;
+```
+
+Verifique conectividade, exchange/bindings e rejeições de publicação no Management UI do RabbitMQ. Nas DLQs notificacao.consultas.dlq e historico.consultas.dlq, x-death identifica a origem; a topologia normativa encaminha cada rejeição para ambas. Não há purge, expiração ou reenvio automático. Corrigir a causa antes de uma eventual operação manual; reprocessamento exige consumidores idempotentes. O dead-letter worker pode aguardar até seu próximo intervalo de 180s após restaurar o destino.
+
+V3 recusa sobreposições ativas preexistentes com mensagem em português e IDs/recurso: corrigir dados somente após análise humana, nunca desabilitar a exclusão. O seed V900 atual contém usuários/médico/pacientes, sem as cinco consultas descritas no roteiro de demonstração. Apenas o profile demo habilita Flyway out-of-order para aplicar V2/V3 depois de V900.
+
+Datas persistidas preservam instantes. O envelope deriva o offset de America/Sao_Paulo na data da consulta e congela essa representação; não recupera o offset original. Falhas transitórias 40P01/40001 retornam o type alteração concorrente, distinto do conflito de agenda 23P01; o cliente relê e tenta novamente, sem retry automático do serviço.
+
+Para uma parada operacional, desabilitar hospital.outbox.scheduler-enabled mantém as pendências. Migrations e dados permanecem; voltar à versão que só registrava eventos em log não mantém a garantia de publicação de fatos novos.
+
+Ver [ADR-001](docs/adr/ADR-001-rabbitmq.md), [ADR-006](docs/adr/ADR-006-transactional-outbox.md) e [contrato normativo](docs/03-contrato-de-eventos.md).

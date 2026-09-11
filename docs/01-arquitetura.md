@@ -112,10 +112,11 @@ hospital-scheduling-fase3/
 │       └── repository/
 └── historico-service/
     └── src/main/java/br/com/fiap/hospital/historico/
-        ├── consumer/                # projeta eventos no read model
-        ├── graphql/                 # controllers @QueryMapping, schema.graphqls
-        ├── model/
-        └── repository/
+        ├── infrastructure/messaging/   # ConsumidorTransacionalDoHistorico, ProjetorDoHistorico e HistoricoConfig
+        ├── infrastructure/persistence/ # entidades e repositórios JPA
+        ├── infrastructure/leitura/     # ConsultasDoHistorico: predicados do filtro no armazenamento
+        ├── infrastructure/correcao/    # CorrecaoDeRegistroHistorico: correção atômica com auditoria
+        └── infrastructure/graphql/     # resolvers, schema.graphqls, escalar DateTime e os dois caminhos de erro
 ```
 
 ## 4. agendamento-service — Clean Architecture
@@ -169,11 +170,106 @@ Para o job proativo funcionar sem chamar o agendamento, o serviço mantém uma *
 - `LogNotificationSender` (padrão, `notificacao.sender=log`)
 - `SmtpNotificationSender` (`notificacao.sender=smtp`, aponta para Mailpit no compose — dá uma demo visual de e-mail chegando)
 
-Toda notificação enviada é persistida em `notificacao_enviada` para auditoria e para evitar reenvio.
+Host, porta e remetente do adaptador SMTP vêm de variáveis de ambiente; não há credencial nem
+endereço de provedor no repositório.
+
+### Consumo (M06)
+
+O consumidor AMQP é a única fronteira do serviço. Para cada envelope válido, na mesma
+transação, ele atualiza a `agenda_local`, envia a notificação reativa quando o fato a exige e
+registra o envio; só então grava o `eventId` em `evento_processado`. A ordem — efeito, depois
+marca — vem da seção 6 de `docs/03-contrato-de-eventos.md`.
+
+**Todos os cinco tipos** materializam a agenda por upsert, inclusive quando a criação daquela
+consulta ainda não foi processada: o snapshot do evento é autossuficiente, e depender da
+ordem deixaria a consulta sem linha após uma entrega fora de ordem ou um replay da DLQ. O
+upsert é condicionado a `occurredAt >= ocorrido_em`, avaliado pelo PostgreSQL sob o lock da
+linha: fato anterior é marcado como processado, mas não regride a agenda nem dispara
+notificação obsoleta. Empate de instante segue a ordem de chegada, porque o contrato não
+declara sequência por agregado. Cancelamento **atualiza** o status e nunca remove a linha — o
+lembrete do M07 precisa distinguir "cancelada" de "inexistente".
+
+Notificam apenas criação, atualização e cancelamento, conforme a tabela acima; confirmação e
+realização atualizam a agenda em silêncio. A notificação está atrelada à **aplicação** do
+fato, não ao seu recebimento.
+
+Todos os instantes que o serviço registra — `atualizado_em`, `enviado_em` e `processado_em` —
+vêm do `Clock` injetado. O instante do fato (`ocorrido_em`) vem do envelope: é o critério de
+ordenação, e derivá-lo do relógio de consumo faria um replay reordenar a agenda.
+
+O serviço não chama o agendamento: o `ConsultaPayload` completo é sua única fonte. Envelope
+inválido, versão desconhecida e falha persistente são rejeitados para
+`notificacao.consultas.dlq` após três tentativas, sem marca de processamento nem linha
+parcial. `correlationId` é restaurado no MDC durante cada tentativa e limpo no `finally`.
+
+**Garantia de entrega, dita como ela é.** O efeito **persistido** é exatamente-uma-vez por
+`eventId`: agenda, auditoria e marca commitam juntas, e a chave primária de
+`evento_processado` serializa a confirmação sob entregas concorrentes. O **envio externo** é
+ao-menos-uma-vez — o sender pode concluir e a transação reverter, e a tentativa seguinte
+reenvia; sob concorrência, ambas as entregas podem alcançar o canal antes de a chave decidir.
+Disso decorre um limite da auditoria: `notificacao_enviada` registra o que transações
+confirmadas produziram, e **não** todo envio que saiu. Eliminar essa janela exigiria um outbox
+próprio do serviço de notificação, que nenhum requisito atual pede.
+
+Rollback operacional: parar o consumidor e preservar banco, fila, DLQ, agenda e auditoria.
+Não apagar marcas processadas — uma versão corrigida retoma sem duplicar efeito.
+
+### Lembrete D-1 (M07)
+
+A varredura lê a `agenda_local` com **um único comando**: consultas `AGENDADA` ou `CONFIRMADA`
+com horário em `(agora, agora + 24h]` — estritamente no futuro e até 24 horas à frente,
+inclusive — e ainda sem lembrete. `agora` vem do `Clock` injetado, e os dois limites vão como
+parâmetros: o relógio do banco não participa. `CANCELADA` e `REALIZADA` nunca são lembradas, o
+que só é possível porque o consumo atualiza o status em vez de apagar a linha. O índice
+`agenda_local(status, data_hora)` sustenta o recorte, e o plano do comando real é medido em
+teste com massa representativa.
+
+Cada candidato é lembrado em transação própria, com a **reserva antes do envio**: o registro
+`LEMBRETE_D1` entra em `notificacao_enviada` por `INSERT ... ON CONFLICT DO NOTHING` sobre a
+unicidade parcial `notificacao_enviada(consulta_id) WHERE tipo = 'LEMBRETE_D1'`, e só então o
+sender é chamado. Duas execuções concorrentes — o job e o disparo manual, ou duas instâncias —
+disputam a mesma chave: a segunda espera a primeira e, se ela confirmou, não envia. A unicidade
+vale durante toda a vida da consulta, então uma remarcação posterior não gera segundo lembrete —
+o aviso reativo de alteração informa o novo horário. A unicidade é parcial porque as
+notificações reativas repetem tipo legitimamente. `LEMBRETE_D1` é tipo local do registro, fora
+de `TipoEvento`, das routing keys e da topologia.
+
+Falha do sender reverte só aquela consulta, que continua elegível na execução seguinte; as
+demais seguem, e a resposta conta só os lembretes confirmados. Falha na leitura inicial dos
+candidatos propaga: o job registra o erro e tenta na hora seguinte, e o endpoint responde 500
+em Problem Detail `https://hospital.fiap.br/erros/erro-interno`, com `correlationId`,
+`timestamp` e `instance`, sem SQL nem exceção na resposta. O tratador é restrito ao controller do
+lembrete e relança `AccessDeniedException` e `AuthenticationException`, para que 401 e 403
+continuem saindo de `RespostaDeSeguranca`.
+
+O job `@Scheduled` roda no início de cada hora (`notificacao.lembrete.cron`, padrão
+`0 0 * * * *`), habilitado por padrão e **ausente** no profile `test`. `POST
+/internal/lembretes/executar` dispara o mesmo caso de uso, restrito a MEDICO e ENFERMEIRO:
+o serviço consome a cadeia de `shared-security` com `/internal/**` como caminho autenticado, e
+a célula de cada perfil está na matriz de `docs/02-especificacao-funcional.md` §3. O texto do
+lembrete formata o horário em `America/Sao_Paulo`, o fuso em que o agendamento deriva a data.
+
+**Garantia:** no máximo um lembrete **persistido** por consulta. O **envio externo** continua
+ao-menos-uma-vez numa janela: se o sender conclui e a confirmação falha, não fica registro, e a
+execução seguinte reenvia.
 
 ## 6. historico-service
 
 Read model puro. Não aceita escrita por HTTP exceto a correção de registro pelo médico (RF-13).
+
+O consumidor AMQP é a única fronteira de projeção. Para cada envelope válido, na mesma
+transação, ele atualiza `consulta_historico` por `INSERT ... ON CONFLICT DO UPDATE ... WHERE`
+e grava a trilha imutável em `consulta_evento`; só então registra `eventId` em
+`evento_processado`. A condição do upsert é avaliada pelo PostgreSQL sob o lock da linha:
+evento antigo entra na trilha, mas não regride o snapshot. Empates de `occurredAt` respeitam a
+ordem de chegada, porque o contrato não declara sequência por agregado.
+
+O histórico não chama o agendamento: o `ConsultaPayload` completo é sua única fonte. O
+consumidor aplica retry contratual de três tentativas; envelope inválido, versão desconhecida e
+falha persistente são rejeitados para `historico.consultas.dlq`, sem marca de processamento nem
+linha parcial na trilha.
+
+Rollback operacional: parar o consumidor e preservar banco, filas, DLQ, trilha e marcas; corrigir e retomar, sem apagar a auditoria.
 
 ```graphql
 type Query {
@@ -191,9 +287,52 @@ input FiltroConsulta {
 }
 ```
 
-`minhasConsultas` resolve o `pacienteId` a partir do JWT — é o caminho do paciente, que nunca informa um id de terceiro.
+`minhasConsultas` resolve o `pacienteId` a partir do JWT e **é exclusiva do perfil PACIENTE**:
+médico e enfermeiro recebem `FORBIDDEN` nela e leem o histórico por `consultasDoPaciente`,
+`consultasDoMedico` e `consulta(id:)`. A operação não aceita identificador como argumento.
 
-Autorização por resolver, com `@PreAuthorize`, e uma checagem extra de propriedade: se o perfil é `PACIENTE`, o `pacienteId` do argumento tem de bater com o do token, senão `403`.
+Autorização por resolver, com `@PreAuthorize`, e uma checagem extra de propriedade fora do corpo
+do resolver: se o perfil é `PACIENTE`, o alvo tem de bater com o do token, senão `FORBIDDEN`.
+Cada célula da matriz da §3 de `docs/02-especificacao-funcional.md` vira um caso de teste lido
+do próprio documento, e uma operação nova sem decisão de autorização quebra a varredura estrutural.
+
+**Semântica do filtro.** `TODAS` não recorta pelo relógio; `FUTURAS` seleciona `dataHora >= agora`;
+`PASSADAS`, `dataHora < agora` — um registro no instante exato pertence ao futuro. O intervalo é
+`[de, ate)`. Período, intervalo e status são combinados por AND, lista de status vazia não restringe,
+e a ordenação é `dataHora, id`, total e determinística. `agora` vem do `Clock` injetado, e todo
+predicado é aplicado pelo PostgreSQL.
+
+**Correção manual (RF-13).** `corrigirRegistroHistorico` é exclusiva de MEDICO. Corrige nome do
+paciente, nome do médico, especialidade, `dataHora`, status e observações; `consultaId` apenas
+seleciona o alvo, e não existe campo corrigível de identificador nem de autor — o autor vem do
+token. Campo ausente não corrige; nulo explícito só é aceito em `observacoes`, onde limpa o registro.
+O status precisa pertencer ao enum válido, mas a máquina de transições do agendamento **não** se
+aplica: corrigir um status errado é o caso de uso. Na mesma transação, o serviço trava a linha,
+aplica a correção, avança `atualizado_em` pelo `Clock` e grava em `consulta_evento` uma linha
+`CORRECAO_MANUAL` com autor, justificativa e valores antes/depois. Falha em qualquer ponto reverte
+tudo. A correção não grava `evento_processado` e não publica evento; `CORRECAO_MANUAL` é tipo local
+da trilha e não entra em `TipoEvento`, routing key ou topologia. Como a correção avança
+`atualizado_em`, a regra de monotonicidade do M08 continua valendo: evento anterior não a desfaz,
+evento posterior a sobrescreve.
+
+**Erros.** Duas naturezas de falha, mesma política. O que é recusado na análise e validação do
+documento — campo desconhecido, enum inexistente, tipo incompatível — é normalizado por um
+`WebGraphQlInterceptor` para `extensions.code=BAD_REQUEST`, sem que resolver algum execute. O que é
+lançado dentro do resolver passa pelo `DataFetcherExceptionResolver`: `FORBIDDEN`, `NOT_FOUND`,
+`BAD_REQUEST` de domínio e, para o inesperado, mensagem genérica sem SQL, stack trace ou nome de
+classe — a causa vai para o log do serviço. Token ausente ou inválido é recusado antes dos dois, na
+fronteira HTTP.
+
+**Segurança e GraphiQL.** O histórico não emite token: consome o filtro e o segredo de
+`shared-security`. A cadeia compartilhada passou a ler duas listas configuráveis — caminhos
+autenticados (padrão `/api/**`) e caminhos públicos adicionais (padrão vazio) —, e continua sendo
+uma única `SecurityFilterChain` com `denyAll` por omissão. O histórico acrescenta `/graphql` à
+primeira em qualquer profile; **apenas** `dev` e `demo` habilitam a interface GraphiQL e acrescentam
+`/graphiql` à segunda. No profile padrão a interface fica desabilitada e o caminho cai no `denyAll`.
+
+**Índices.** `V2` cria `consulta_historico(paciente_id, data_hora)` e `(medico_id, data_hora)`, sem
+tocar em `V1`. Não há índice por status: baixa seletividade sobre quatro valores, e o status nunca
+aparece sozinho nas consultas expostas. O plano de execução real é verificado em teste.
 
 ## 7. Segurança
 
@@ -281,3 +420,19 @@ Estas convenções são injetadas em toda requisição de planejamento pelo `con
 ### Cortes conscientes
 
 Não usamos: MapStruct, Lombok, `@MockBean` para infraestrutura, banco em memória (H2). Cada uma dessas escolhas troca velocidade de escrita por perda de fidelidade ou de legibilidade — trocas ruins num projeto que vai ser lido e avaliado.
+
+## 9. Publicação transacional e concorrência (M05)
+
+Os decoradores de infrastructure/transacao continuam delimitando a transação REQUIRED dos quatro casos de escrita. OutboxEventPublisher exige MANDATORY; JdbcTemplate participa da mesma conexão transacional gerenciada pelo JpaTransactionManager. O fato inclui snapshots imutáveis antes/depois da alteração. Serialização ou gravação recusada desfaz a consulta junto com o evento.
+
+O relay é um bean transacional separado do scheduler. Seleciona até 50 pendentes por tentativas/criado_em/id com FOR UPDATE SKIP LOCKED, mantém locks durante a publicação e só marca sucesso com ACK sem return. Contador numeric não tem limite artificial; falhas permanecem pendentes, priorizadas depois de eventos novos. At-least-once é parte do contrato: queda entre ACK e commit local reenvia o mesmo eventId/envelope. M06/M08 devem deduplicar.
+
+O filtro HTTP conserva o correlationId no atributo/resposta e no MDC durante a cadeia. O publisher o grava no envelope; o relay recupera esse valor minutos depois e restaura o MDC anterior ao terminar cada evento. dataHora deriva do instante em America/Sao_Paulo na data da consulta, inclusive regras históricas; occurredAt é UTC e não muda com a publicação tardia.
+
+V3 acrescenta periodo_ocupado, derivado por trigger em UTC, e exclusões GiST independentes para médico e paciente ativos. O intervalo é semiaberto. As pré-queries antecipam mensagens de conflito; a constraint garante corretude inclusive para outro escritor SQL. A expressão timestamptz + interval não é indexada nem declarada falsamente IMMUTABLE.
+
+Em saveAndFlush, somente 23P01 das duas constraints nomeadas vira ConflitoDeAgendaException. Nome vem do diagnóstico estruturado do driver, pois o Hibernate pode omiti-lo. 40P01 e 40001 viram AlteracaoConcorrenteException, assim como lock otimista, sem afirmar que o horário está ocupado. Os dois tipos continuam 409 distintos. Nenhuma query é feita após o erro e nenhuma exceção é engolida para tentar commit.
+
+Não há retry automático: decisão consciente para o ambiente demonstrativo, onde o IT força a corrida. Múltiplas instâncias ou tráfego concorrente real exigem reavaliar retentativa limitada da transação inteira.
+
+A configuração compartilhada de RabbitMQ aplica a topologia literal do contrato, validação estrita de envelope/headers e retry incluindo conversão. default-requeue-rejected=false é obrigatório. DLQs não têm consumidor/reenvio automático. Procedimentos e diagnóstico estão no [README](../README.md#operação-dos-eventos-de-consulta-m05); decisões em [ADR-001](adr/ADR-001-rabbitmq.md) e [ADR-006](adr/ADR-006-transactional-outbox.md).

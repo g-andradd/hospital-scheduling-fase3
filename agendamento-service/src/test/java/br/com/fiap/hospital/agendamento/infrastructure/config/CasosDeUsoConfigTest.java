@@ -50,6 +50,7 @@ class CasosDeUsoConfigTest {
     private final ApplicationContextRunner contexto = new ApplicationContextRunner()
             .withUserConfiguration(CasosDeUsoConfig.class)
             .withBean(ConsultaRepositoryPort.class, ConsultaRepositoryFake::new)
+            .withBean(EventPublisherPort.class, br.com.fiap.hospital.agendamento.fake.EventPublisherFake::new)
             .withBean(UsuarioRepositoryPort.class, UsuarioRepositoryVazio::new)
             .withBean(VerificadorDeSenhaPort.class, VerificadorDeSenhaFalso::new);
 

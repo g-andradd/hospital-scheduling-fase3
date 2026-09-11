@@ -83,7 +83,7 @@ Três releases, conforme `docs/05-fluxo-de-trabalho.md` §4:
 | Versão | Fecha após | Entrega |
 |---|---|---|
 | `0.1.0` | M04 | Agendamento seguro ponta a ponta |
-| `0.2.0` | M09 | Mensageria, notificações e histórico GraphQL |
+| `0.2.0` | M07 | Mensageria, notificações, histórico GraphQL e lembrete D-1 |
 | `1.0.0` | M14 | Entrega do Tech Challenge |
 
 ## 8. Definition of Done (do projeto)

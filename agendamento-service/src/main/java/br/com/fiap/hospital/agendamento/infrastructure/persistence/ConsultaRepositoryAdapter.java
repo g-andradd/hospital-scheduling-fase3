@@ -16,6 +16,10 @@ import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.dao.DataAccessException;
+import java.sql.SQLException;
+import org.postgresql.util.PSQLException;
+import br.com.fiap.hospital.agendamento.domain.exception.ConflitoDeAgendaException;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -49,8 +53,22 @@ public class ConsultaRepositoryAdapter implements ConsultaRepositoryPort {
 
             return mapper.paraDominio(repositorio.saveAndFlush(entidade));
         } catch (OptimisticLockingFailureException e) {
-            // Traduz para o dominio: nenhum tipo do Spring sobe alem desta camada.
             throw new AlteracaoConcorrenteException(consulta.id());
+        } catch (DataAccessException e) {
+            for (Throwable causa=e; causa!=null; causa=causa.getCause()) {
+                if (causa instanceof SQLException sql &&
+                        ("40P01".equals(sql.getSQLState()) || "40001".equals(sql.getSQLState())))
+                    throw new AlteracaoConcorrenteException(consulta.id());
+                if (causa instanceof PSQLException violacao && "23P01".equals(violacao.getSQLState())
+                        && violacao.getServerErrorMessage()!=null) {
+                    if ("ex_consulta_medico_periodo".equals(violacao.getServerErrorMessage().getConstraint()))
+                        throw ConflitoDeAgendaException.doMedico(consulta.periodo().toString());
+                    if ("ex_consulta_paciente_periodo".equals(violacao.getServerErrorMessage().getConstraint()))
+                        throw ConflitoDeAgendaException.doPaciente(consulta.periodo().toString());
+                }
+            }
+            throw e;
+        
         }
     }
 

@@ -2,5 +2,86 @@ spring:
   application:
     name: notificacao-service
 
+  datasource:
+    url: ${NOTIFICACAO_DB_URL:jdbc:postgresql://localhost:5432/notificacao_db}
+    username: ${NOTIFICACAO_DB_USER:hospital}
+    password: ${NOTIFICACAO_DB_PASSWORD:hospital}
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+  flyway:
+    locations: classpath:db/migration
+
+  # O adaptador SMTP so e ativado por notificacao.sender=smtp. Host e porta vem do
+  # ambiente; o fallback local nao e segredo e nao aponta para provedor algum.
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:hospital}
+    password: ${RABBITMQ_PASSWORD:hospital}
+    connection-timeout: 2s
+    channel-rpc-timeout: 2s
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+    cache:
+      channel:
+        checkout-timeout: 2s
+    listener:
+      simple:
+        acknowledge-mode: auto
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1000ms
+          multiplier: 2.0
+          max-interval: 10000ms
+
 server:
   port: 8082
+
+hospital:
+  jwt:
+    # O mesmo segredo com que o agendamento assina. Sem valor padrao, de proposito: a
+    # guarda de segredo do modulo recusa fallback nao local para chave sensivel, e sem a
+    # variavel JwtProperties impede a partida em vez de aceitar assinatura fraca.
+    secret: ${JWT_SECRET}
+    expiracao: PT8H
+    emissor: hospital-agendamento
+  security:
+    caminhos:
+      # Substitui o padrao /api/**: este servico nao tem /api, e o que ficar fora desta
+      # lista cai no denyAll da cadeia compartilhada. O perfil e decidido no metodo.
+      autenticados: /internal/**
+
+notificacao:
+  # Canal de envio. O padrao e o adaptador de log: sem configuracao, nenhum
+  # provedor externo e contactado.
+  sender: ${NOTIFICACAO_SENDER:log}
+  remetente: ${NOTIFICACAO_REMETENTE:nao-responda@hospital.local}
+  lembrete:
+    # Varredura D-1, em cron do Spring (segundo minuto hora dia mes dia-da-semana). O
+    # padrao dispara no inicio de cada hora; a janela em si vem do Clock, nao daqui.
+    cron: "${NOTIFICACAO_LEMBRETE_CRON:0 0 * * * *}"
+    agendador-habilitado: ${NOTIFICACAO_LEMBRETE_AGENDADOR_HABILITADO:true}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: test
+
+notificacao:
+  lembrete:
+    # Nos testes nada executa sozinho: sem o bean do agendador nao ha tarefa registrada,
+    # e a varredura so roda quando o teste a dispara.
+    agendador-habilitado: false
