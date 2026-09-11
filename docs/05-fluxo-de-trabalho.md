@@ -130,7 +130,8 @@ git checkout -b release/0.1.0
 # 2. estabilizar — só correção, versão e documentação. Nenhuma funcionalidade nova.
 #    - subir <revision> no POM pai para 0.1.0
 #    - atualizar CHANGELOG.md
-#    - rodar mvn verify e o smoke test
+#    - rodar mvn -q clean verify na raiz, sem teste ignorado
+#    - rodar scripts/smoke-test.sh, a partir da release em que o M10 ja o tiver entregue
 #    - conferir que openspec/changes/ nao tem change ativa e changes/archive/ tem as da release
 
 git commit -am "chore(release): prepara versão 0.1.0"
@@ -152,6 +153,8 @@ git branch -d release/0.1.0
 ```
 
 **Regra da branch de release:** entra correção de bug, ajuste de versão e documentação. Não entra funcionalidade. Se aparecer funcionalidade faltando, ela vira uma feature em `develop` e entra na próxima release.
+
+**Gate de fechamento:** a verificação exigida é a que já existe na release. Na `0.1.0` e na `0.2.0`, o gate é `mvn -q clean verify` na raiz, com todas as suítes executadas e nenhum teste ignorado — `scripts/smoke-test.sh` ainda não existe, e só é criado pelo M10. Depois de entregue pelo M10, o smoke test passa a integrar o fechamento de toda release seguinte, a partir da `1.0.0`, junto com o `mvn -q clean verify`.
 
 ---
 
