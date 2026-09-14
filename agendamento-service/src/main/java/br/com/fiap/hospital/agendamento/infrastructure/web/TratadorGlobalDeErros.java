@@ -8,6 +8,7 @@ import br.com.fiap.hospital.agendamento.domain.exception.AlteracaoConcorrenteExc
 import br.com.fiap.hospital.agendamento.domain.exception.ConflitoDeAgendaException;
 import br.com.fiap.hospital.agendamento.domain.exception.MotivoDeCancelamentoObrigatorioException;
 import br.com.fiap.hospital.agendamento.domain.exception.RecursoNaoEncontradoException;
+import br.com.fiap.hospital.agendamento.domain.exception.TextoComCaractereInvalidoException;
 import br.com.fiap.hospital.agendamento.domain.exception.TransicaoDeStatusInvalidaException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
@@ -101,6 +102,46 @@ public class TratadorGlobalDeErros extends ResponseEntityExceptionHandler {
     public ProblemDetail motivoObrigatorio(
             MotivoDeCancelamentoObrigatorioException e, HttpServletRequest requisicao) {
         return problema(TipoDeErro.MOTIVO_DE_CANCELAMENTO_OBRIGATORIO, e.getMessage(), requisicao);
+    }
+
+    /**
+     * Texto livre com NUL, que nem a coluna de texto nem o outbox jsonb representam.
+     *
+     * <p>Sem este tratador a recusa nao acontecia: o texto era aceito e a falha aparecia
+     * depois, no banco ou na serialização do evento — 500 por uma entrada do cliente.
+     * Os demais caracteres de controle sao persistiveis e nao passam por aqui.
+     */
+    @ExceptionHandler(TextoComCaractereInvalidoException.class)
+    public ProblemDetail textoComCaractereInvalido(
+            TextoComCaractereInvalidoException e, HttpServletRequest requisicao) {
+        return problema(TipoDeErro.TEXTO_COM_CARACTERE_INVALIDO, e.getMessage(), requisicao);
+    }
+
+    /**
+     * Falha de conversao na <b>leitura</b> da requisicao.
+     *
+     * <p>{@link HttpMessageNotReadableException} ja e coberta pela familia do MVC, mas
+     * nem toda falha de leitura chega nessa forma: um corpo com chave JSON duplicada sobe
+     * como {@code HttpMessageConversionException} — a superclasse, nao a subclasse de
+     * leitura — e escapava para o catch-all, virando 500.
+     *
+     * <p>A guarda e o que impede este tratador de virar rede de captura do supertipo
+     * inteiro: falha ao <b>escrever</b> a resposta e defeito do servico, nao erro do
+     * cliente, e responder 400 para ela esconderia exatamente o tipo de bug que este
+     * advice existe para revelar.
+     */
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageConversionException.class)
+    public ProblemDetail corpoIlegivel(
+            org.springframework.http.converter.HttpMessageConversionException e,
+            HttpServletRequest requisicao) {
+
+        if (e instanceof org.springframework.http.converter.HttpMessageNotWritableException naoEscrevivel) {
+            throw naoEscrevivel;
+        }
+        return problema(
+                TipoDeErro.REQUISICAO_MALFORMADA,
+                "Corpo da requisicao malformado ou ausente",
+                requisicao);
     }
 
     /**

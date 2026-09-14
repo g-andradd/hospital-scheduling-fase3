@@ -2,6 +2,7 @@ package br.com.fiap.hospital.agendamento.application;
 
 import br.com.fiap.hospital.agendamento.domain.Medico;
 import br.com.fiap.hospital.agendamento.domain.Paciente;
+import br.com.fiap.hospital.agendamento.domain.TextoRepresentavel;
 import br.com.fiap.hospital.agendamento.domain.Usuario;
 import br.com.fiap.hospital.agendamento.domain.exception.CredencialInvalidaException;
 import br.com.fiap.hospital.agendamento.domain.port.UsuarioRepositoryPort;
@@ -29,6 +30,17 @@ public class AutenticarUsuarioUseCase {
      *     usuario inativo, indistintamente
      */
     public IdentidadeAutenticada executar(AutenticarUsuarioCommand comando) {
+        // Credencial com NUL nao e representavel como parametro de consulta: o PostgreSQL
+        // recusa o byte 0x00, a consulta por e-mail estourava no driver e virava 500 —
+        // falha de servidor provocada por um corpo de requisicao. A recusa e a mesma de
+        // qualquer credencial invalida, inclusive no tempo gasto: distinguir aqui
+        // transformaria o formato do e-mail num sinal sobre o cadastro.
+        if (!TextoRepresentavel.representavel(comando.email())
+                || !TextoRepresentavel.representavel(comando.senha())) {
+            senhas.consumirTempoDeVerificacao();
+            throw new CredencialInvalidaException();
+        }
+
         Optional<Usuario> encontrado = usuarios.buscarUsuarioPorEmail(comando.email());
 
         // A verificacao de senha SEMPRE roda, mesmo sem usuario. Sem isto, a rota do

@@ -32,6 +32,14 @@ spring:
     username: ${POSTGRES_USER:hospital}
     password: ${POSTGRES_PASSWORD:hospital}
 
+  jackson:
+    parser:
+      # Chave repetida no corpo e requisicao ambigua: o ultimo valor vence em silencio,
+      # e o cliente nao fica sabendo qual dos dois foi usado. Sem esta deteccao, o
+      # corpo era aceito em alguns endpoints e, em outros, estourava na conversao e
+      # virava 500. Com ela, a recusa e sempre 400, em todos os corpos.
+      strict-duplicate-detection: true
+
   jpa:
     # O Flyway cria o schema; o Hibernate apenas confere. `validate` recusa subir
     # quando o mapeamento diverge do banco, em vez de descobrir a divergencia na
