@@ -10,8 +10,12 @@
 # Codigos de saida: 0 sucesso; 1 verificacao divergente; 2 preflight; 3 prazo esgotado;
 # 4 processo encerrado; 5 limpeza incompleta; 130 SIGINT; 143 SIGTERM.
 #
+# O fluxo leva um X-Correlation-Id derivado do RUN_ID e exige, nos logs JSON dos tres servicos (profile
+# docker), o registro da consulta criada com esse mesmo correlationId (M11, D7).
+#
 # Uso:  scripts/smoke-test.sh
 #       SMOKE_MANTER_LOGS=1 scripts/smoke-test.sh   (preserva o pacote de diagnostico tambem em sucesso)
+#       JQ_BIN=/caminho/do/jq scripts/smoke-test.sh (executavel do jq; o padrao e jq)
 #
 # Carregado por `source`, so define as funcoes: o fluxo roda apenas quando executado.
 
@@ -30,10 +34,17 @@ readonly USUARIO_MEDICO_ID="11111111-1111-1111-1111-111111111111"
 readonly EMAIL_MEDICO="medico@hospital.com"
 readonly EMAIL_PACIENTE="paciente@hospital.com"
 readonly SENHA_DEMO="Senha@123"
+readonly LOGGER_RELAY="br.com.fiap.hospital.agendamento.infrastructure.messaging.OutboxRelay"
+readonly LOGGER_PROJECAO="br.com.fiap.hospital.historico.infrastructure.messaging.ConsumidorTransacionalDoHistorico"
+readonly LOGGER_CANAL="br.com.fiap.hospital.notificacao.sender.LogNotificationSender"
 readonly REGEX_UUID='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+
+# Executavel do jq: padrao jq; injetavel para os testes do roteiro, que nao dependem de jq instalado.
+JQ_BIN="${JQ_BIN:-jq}"
 
 RAIZ=""
 RUN_ID=""
+CORRELATION_ID=""
 RUNTIME=""
 RUNTIME_CRIADO=""
 REDE=""
@@ -88,7 +99,7 @@ mascarar() {
 
 # Saida do jq sem CR: o jq do Windows escreve CRLF.
 jq_texto() {
-    jq "$@" | tr -d '\r'
+    "$JQ_BIN" "$@" | tr -d '\r'
 }
 
 aleatorio_hex() {
@@ -186,10 +197,10 @@ preflight() {
     fi
     command -v mvn >/dev/null 2>&1 || ausentes+=("maven")
     command -v curl >/dev/null 2>&1 || ausentes+=("curl")
-    if ! command -v jq >/dev/null 2>&1; then
+    if ! command -v "$JQ_BIN" >/dev/null 2>&1; then
         ausentes+=("jq 1.6 ou superior")
     else
-        versao="$(jq --version 2>/dev/null | tr -d '\r')"
+        versao="$("$JQ_BIN" --version 2>/dev/null | tr -d '\r')"
         if [[ ! "$versao" =~ ^jq-([0-9]+)\.([0-9]+) ]] \
             || ((BASH_REMATCH[1] < 1 || (BASH_REMATCH[1] == 1 && BASH_REMATCH[2] < 6))); then
             ausentes+=("jq 1.6 ou superior (encontrado: ${versao:-desconhecido})")
@@ -209,10 +220,11 @@ preflight() {
 
 criar_runtime() {
     RUN_ID="$(date -u +%Y%m%d%H%M%S)-$(aleatorio_hex 3)"
+    CORRELATION_ID="smoke-$RUN_ID"
     RUNTIME_CRIADO="$(mktemp -d "${TMPDIR:-/tmp}/${PREFIXO_RUNTIME}XXXXXXXX")"
     RUNTIME="$RUNTIME_CRIADO"
     runtime_valido || falhar "$DIVERGENCIA" "diretorio de runtime inesperado: $RUNTIME"
-    registrar "RUN_ID=$RUN_ID runtime=$RUNTIME"
+    registrar "RUN_ID=$RUN_ID runtime=$RUNTIME correlationId=$CORRELATION_ID"
 }
 
 # O runtime so e tratado como tal com o prefixo e o caminho devolvido pelo mktemp.
@@ -339,7 +351,7 @@ iniciar_servicos() {
     JWT_SECRET_EFEMERO="$(aleatorio_hex 48)"
 
     LOG_DO_SERVICO[agendamento]="$RUNTIME/agendamento.log"
-    SPRING_PROFILES_ACTIVE=demo SERVER_PORT=0 \
+    SPRING_PROFILES_ACTIVE=demo,docker SERVER_PORT=0 \
         AGENDAMENTO_DB_URL="$base/agendamento_db" POSTGRES_USER="$PG_USUARIO" POSTGRES_PASSWORD="$PG_SENHA" \
         RABBITMQ_HOST=127.0.0.1 RABBITMQ_PORT="$RABBIT_PORTA" RABBITMQ_USER="$RABBIT_USUARIO" RABBITMQ_PASSWORD="$RABBIT_SENHA" \
         JWT_SECRET="$JWT_SECRET_EFEMERO" \
@@ -347,7 +359,7 @@ iniciar_servicos() {
     registrar_processo agendamento "$!" "$jar_agendamento"
 
     LOG_DO_SERVICO[notificacao]="$RUNTIME/notificacao.log"
-    SPRING_PROFILES_ACTIVE="" SERVER_PORT=0 NOTIFICACAO_SENDER=log \
+    SPRING_PROFILES_ACTIVE=docker SERVER_PORT=0 NOTIFICACAO_SENDER=log \
         NOTIFICACAO_DB_URL="$base/notificacao_db" NOTIFICACAO_DB_USER="$PG_USUARIO" NOTIFICACAO_DB_PASSWORD="$PG_SENHA" \
         RABBITMQ_HOST=127.0.0.1 RABBITMQ_PORT="$RABBIT_PORTA" RABBITMQ_USER="$RABBIT_USUARIO" RABBITMQ_PASSWORD="$RABBIT_SENHA" \
         JWT_SECRET="$JWT_SECRET_EFEMERO" \
@@ -355,7 +367,7 @@ iniciar_servicos() {
     registrar_processo notificacao "$!" "$jar_notificacao"
 
     LOG_DO_SERVICO[historico]="$RUNTIME/historico.log"
-    SPRING_PROFILES_ACTIVE="" SERVER_PORT=0 \
+    SPRING_PROFILES_ACTIVE=docker SERVER_PORT=0 \
         HISTORICO_DB_URL="$base/historico_db" HISTORICO_DB_USER="$PG_USUARIO" HISTORICO_DB_PASSWORD="$PG_SENHA" \
         RABBITMQ_HOST=127.0.0.1 RABBITMQ_PORT="$RABBIT_PORTA" RABBITMQ_USER="$RABBIT_USUARIO" RABBITMQ_PASSWORD="$RABBIT_SENHA" \
         JWT_SECRET="$JWT_SECRET_EFEMERO" \
@@ -419,12 +431,16 @@ descobrir_porta() {
 
 # ------------------------------------------------------------------ HTTP e JSON
 
-# requisitar <metodo> <url> [corpo] -> preenche HTTP_STATUS, HTTP_CORPO e HTTP_CABECALHOS.
+# requisitar <metodo> <url> [corpo] [cabecalho...] -> preenche HTTP_STATUS, HTTP_CORPO e HTTP_CABECALHOS.
 HTTP_STATUS=""
 HTTP_CORPO=""
 HTTP_CABECALHOS=""
 requisitar() {
-    local metodo="$1" url="$2" corpo="${3:-}"
+    local metodo="$1" url="$2" corpo="${3:-}" cabecalho
+    shift 2
+    if (($# > 0)); then
+        shift
+    fi
     HTTP_CORPO="$RUNTIME/resposta.json"
     HTTP_CABECALHOS="$RUNTIME/cabecalhos.txt"
     : >"$HTTP_CORPO"
@@ -437,12 +453,15 @@ requisitar() {
     if [[ -n "$corpo" ]]; then
         argumentos+=(--data-binary "$corpo")
     fi
+    for cabecalho in "$@"; do
+        argumentos+=(-H "$cabecalho")
+    done
     HTTP_STATUS="$(curl "${argumentos[@]}" "$url" 2>/dev/null | tr -d '\r')" || HTTP_STATUS="000"
     ULTIMA_RESPOSTA="$metodo $url -> HTTP $HTTP_STATUS $(tr -d '\r' <"$HTTP_CORPO" | head -c 2000)"
 }
 
 json_valido() {
-    jq -e . "$1" >/dev/null 2>&1
+    "$JQ_BIN" -e . "$1" >/dev/null 2>&1
 }
 
 exigir_json() {
@@ -452,7 +471,7 @@ exigir_json() {
 exigir() {
     local descricao="$1" filtro="$2"
     shift 2
-    jq -e "$@" "$filtro" "$HTTP_CORPO" >/dev/null 2>&1 || falhar "$DIVERGENCIA" "$descricao"
+    "$JQ_BIN" -e "$@" "$filtro" "$HTTP_CORPO" >/dev/null 2>&1 || falhar "$DIVERGENCIA" "$descricao"
 }
 
 url() {
@@ -463,7 +482,7 @@ url() {
 
 login_pronto() {
     local corpo
-    corpo="$(jq -cn --arg email "$EMAIL_MEDICO" --arg senha "$SENHA_DEMO" '{email: $email, senha: $senha}')"
+    corpo="$("$JQ_BIN" -cn --arg email "$EMAIL_MEDICO" --arg senha "$SENHA_DEMO" '{email: $email, senha: $senha}')"
     TOKEN=""
     requisitar POST "$(url agendamento /auth/login)" "$corpo"
     case "$HTTP_STATUS" in
@@ -486,7 +505,7 @@ conferir_claims() {
     done
     printf '%s' "$carga" | base64 -d >"$RUNTIME/claims.json" 2>/dev/null \
         || falhar "$DIVERGENCIA" "carga do token nao decodificavel"
-    jq -e --arg sub "$USUARIO_MEDICO_ID" --arg medico "$MEDICO_ID" --arg email "$EMAIL_MEDICO" \
+    "$JQ_BIN" -e --arg sub "$USUARIO_MEDICO_ID" --arg medico "$MEDICO_ID" --arg email "$EMAIL_MEDICO" \
         '.sub == $sub and .medicoId == $medico and .email == $email and .perfil == "MEDICO"' \
         "$RUNTIME/claims.json" >/dev/null 2>&1 || falhar "$DIVERGENCIA" "claims do token divergem do seed V900"
 }
@@ -496,7 +515,7 @@ graphql() {
     if (($# > 1)); then
         variaveis="$2"
     fi
-    requisitar POST "$(url historico /graphql)" "$(jq -cn --arg q "$consulta" --argjson v "$variaveis" '{query: $q, variables: $v}')"
+    requisitar POST "$(url historico /graphql)" "$("$JQ_BIN" -cn --arg q "$consulta" --argjson v "$variaveis" '{query: $q, variables: $v}')"
 }
 
 historico_pronto() {
@@ -543,11 +562,11 @@ criar_consulta() {
     OBSERVACOES="smoke-$RUN_ID"
     DATA_HORA="$(jq_texto -nr 'now + 30 * 86400 | floor | . - (. % 3600) | todate')"
     local corpo
-    corpo="$(jq -cn --arg paciente "$PACIENTE_ID" --arg medico "$MEDICO_ID" --arg registrante "$USUARIO_MEDICO_ID" \
+    corpo="$("$JQ_BIN" -cn --arg paciente "$PACIENTE_ID" --arg medico "$MEDICO_ID" --arg registrante "$USUARIO_MEDICO_ID" \
         --arg dataHora "$DATA_HORA" --arg observacoes "$OBSERVACOES" \
         '{pacienteId: $paciente, medicoId: $medico, registradoPorId: $registrante, dataHora: $dataHora,
           duracaoMinutos: 30, observacoes: $observacoes}')"
-    requisitar POST "$(url agendamento /api/v1/consultas)" "$corpo"
+    requisitar POST "$(url agendamento /api/v1/consultas)" "$corpo" "X-Correlation-Id: $CORRELATION_ID"
     [[ "$HTTP_STATUS" == "201" ]] || falhar "$DIVERGENCIA" "criacao da consulta respondeu HTTP $HTTP_STATUS, esperado 201"
     exigir_json "$HTTP_CORPO" "criacao da consulta"
     exigir "consulta criada com campos divergentes" \
@@ -560,7 +579,11 @@ criar_consulta() {
     location="$(tr -d '\r' <"$HTTP_CABECALHOS" | sed -n 's/^[Ll]ocation:[[:space:]]*//p' | tail -n 1)"
     [[ "$location" == */api/v1/consultas/"$CONSULTA_ID" ]] \
         || falhar "$DIVERGENCIA" "Location divergente: '$location'"
-    registrar "consulta $CONSULTA_ID criada para $DATA_HORA com observacoes $OBSERVACOES"
+    local devolvido
+    devolvido="$(tr -d '\r' <"$HTTP_CABECALHOS" | sed -n 's/^[Xx]-[Cc]orrelation-[Ii]d:[[:space:]]*//p' | tail -n 1)"
+    [[ "$devolvido" == "$CORRELATION_ID" ]] \
+        || falhar "$DIVERGENCIA" "X-Correlation-Id devolvido '$devolvido', esperado '$CORRELATION_ID'"
+    registrar "consulta $CONSULTA_ID criada para $DATA_HORA com observacoes $OBSERVACOES e X-Correlation-Id devolvido"
 }
 
 # Instante de um DateTime ISO-8601 com Z ou deslocamento, em segundos.
@@ -568,6 +591,49 @@ readonly JQ_INSTANTE='def instante: capture("^(?<base>[0-9]{4}-[0-9]{2}-[0-9]{2}
   | (.base + (.segundos // ":00") + "Z" | fromdateiso8601)
     - (if .tz == "Z" then 0
        else (if .tz[0:1] == "-" then -1 else 1 end) * ((.tz[1:3] | tonumber) * 3600 + (.tz[4:6] | tonumber) * 60) end);'
+
+# ------------------------------------------------------------------ registros de log correlacionados (M11, D7)
+
+# Para cada registro JSON do logger e da consulta da execucao, uma linha "igual|completo" ou
+# "divergente|completo": a correlacao comparada com a enviada, e completo quando ha instante,
+# nivel, origem, mensagem e servico. Linhas nao JSON, como o banner, sao ignoradas.
+readonly JQ_REGISTRO_DO_FLUXO='rtrimstr("\r") | fromjson? | select(type == "object" and .logger_name == $logger
+    and (if $mensagem == "" then ((.message // "") | tostring | contains($consulta)) else .message == $mensagem end))
+  | (if .correlationId == $correlacao then "igual" else "divergente" end) + "|"
+    + ([."@timestamp", .level, .logger_name, .message, .service] | all(type == "string" and length > 0) | tostring)'
+
+# registro_do_fluxo <arquivo> <logger> <consulta> <correlacao> [mensagem exata]
+# 0 com o registro presente e correto; 1 enquanto ausente; registro com outro correlationId ou sem os
+# campos exigidos e falha imediata, codigo 1.
+registro_do_fluxo() {
+    local arquivo="$1" logger="$2" consulta="$3" correlacao="$4" mensagem="${5:-}" resultado
+    [[ -f "$arquivo" ]] || return 1
+    resultado="$(jq_texto -R -r --arg logger "$logger" --arg consulta "$consulta" --arg correlacao "$correlacao" \
+        --arg mensagem "$mensagem" "$JQ_REGISTRO_DO_FLUXO" "$arquivo")" || return 1
+    ULTIMA_RESPOSTA="registros de $logger da consulta $consulta: ${resultado//$'\n'/, }"
+    [[ -n "$resultado" ]] || return 1
+    if [[ $'\n'"$resultado" == *$'\n'divergente* ]]; then
+        falhar "$DIVERGENCIA" "registro de $logger da consulta $consulta com correlationId diferente de $correlacao"
+    fi
+    if [[ "$resultado" == *"|false"* ]]; then
+        falhar "$DIVERGENCIA" "registro de $logger da consulta $consulta sem instante, nivel, origem, mensagem ou servico"
+    fi
+    return 0
+}
+
+# registro_correlacionado <arquivo> <logger> <consulta> <correlacao> <prazo> [mensagem exata]
+# Espera o registro ate o prazo: ausente no prazo e codigo 3; divergente e codigo 1.
+registro_correlacionado() {
+    local arquivo="$1" logger="$2" consulta="$3" correlacao="$4" prazo="$5" mensagem="${6:-}"
+    aguardar "registro JSON de ${logger##*.} da consulta $consulta com correlationId $correlacao" "$prazo" \
+        registro_do_fluxo "$arquivo" "$logger" "$consulta" "$correlacao" "$mensagem"
+}
+
+verificar_publicacao() {
+    ETAPA="correlacao no agendamento"
+    registro_correlacionado "${LOG_DO_SERVICO[agendamento]}" "$LOGGER_RELAY" "$CONSULTA_ID" "$CORRELATION_ID" 60
+    registrar "agendamento: evento da consulta publicado pelo relay com correlationId $CORRELATION_ID"
+}
 
 # ------------------------------------------------------------------ notificacao (D12)
 
@@ -581,14 +647,10 @@ notificacao_persistida() {
     [[ "$(jq_texto -n --argjson n "$NOTIFICACOES" '$n | length')" != "0" ]]
 }
 
-log_do_canal_contem() {
-    grep -F -q -- "$1" "${LOG_DO_SERVICO[notificacao]}"
-}
-
 verificar_notificacao() {
     ETAPA="notificacao"
     aguardar "registro persistido da notificacao da consulta" 90 notificacao_persistida
-    jq -e -n --argjson n "$NOTIFICACOES" --arg destinatario "$EMAIL_PACIENTE" \
+    "$JQ_BIN" -e -n --argjson n "$NOTIFICACOES" --arg destinatario "$EMAIL_PACIENTE" \
         '$n | length == 1 and (.[0] | .tipo == "CONSULTA_CRIADA" and .canal == "LOG" and .destinatario == $destinatario
           and (.conteudo | length > 0))' >/dev/null \
         || falhar "$DIVERGENCIA" "notificacao persistida divergente: esperado exatamente um CONSULTA_CRIADA por LOG para $EMAIL_PACIENTE"
@@ -598,8 +660,9 @@ verificar_notificacao() {
     local conteudo linha
     conteudo="$(jq_texto -r -n --argjson n "$NOTIFICACOES" '$n[0].conteudo')"
     linha="Notificacao para $EMAIL_PACIENTE: Consulta agendada | $conteudo"
-    aguardar "linha do LogNotificationSender no log da notificacao" 30 log_do_canal_contem "$linha"
-    registrar "notificacao comprovada: registro persistido e linha do canal de log com o mesmo conteudo"
+    ETAPA="correlacao na notificacao"
+    registro_correlacionado "${LOG_DO_SERVICO[notificacao]}" "$LOGGER_CANAL" "$CONSULTA_ID" "$CORRELATION_ID" 30 "$linha"
+    registrar "notificacao comprovada: registro persistido e registro JSON do canal de log com o mesmo conteudo e correlationId"
 }
 
 # ------------------------------------------------------------------ historico (D11)
@@ -610,10 +673,10 @@ validar_resposta_graphql() {
     local status="$1" arquivo="$2"
     [[ "$status" == "200" ]] || falhar "$DIVERGENCIA" "GraphQL respondeu HTTP $status"
     json_valido "$arquivo" || falhar "$DIVERGENCIA" "a resposta GraphQL nao e JSON valido"
-    if jq -e '(.errors // []) | length == 0' "$arquivo" >/dev/null; then
+    if "$JQ_BIN" -e '(.errors // []) | length == 0' "$arquivo" >/dev/null; then
         return 0
     fi
-    if jq -e '[.errors[] | (.extensions.code // .extensions.classification // "")] | all(. == "NOT_FOUND")' \
+    if "$JQ_BIN" -e '[.errors[] | (.extensions.code // .extensions.classification // "")] | all(. == "NOT_FOUND")' \
         "$arquivo" >/dev/null; then
         return 1
     fi
@@ -622,7 +685,7 @@ validar_resposta_graphql() {
 
 consulta_no_historico() {
     graphql 'query ($id: ID!) { consulta(id: $id) { id pacienteId medicoId status observacoes dataHora } }' \
-        "$(jq -cn --arg id "$CONSULTA_ID" '{id: $id}')"
+        "$("$JQ_BIN" -cn --arg id "$CONSULTA_ID" '{id: $id}')"
     if [[ "$HTTP_STATUS" == "000" ]]; then
         return 1
     fi
@@ -637,7 +700,9 @@ verificar_historico() {
           and .status == "AGENDADA" and .observacoes == $observacoes and (.dataHora | instante) == ($dataHora | instante)' \
         --arg id "$CONSULTA_ID" --arg paciente "$PACIENTE_ID" --arg medico "$MEDICO_ID" \
         --arg observacoes "$OBSERVACOES" --arg dataHora "$DATA_HORA"
-    registrar "historico comprovado: consulta $CONSULTA_ID AGENDADA com o mesmo instante e observacoes"
+    ETAPA="correlacao no historico"
+    registro_correlacionado "${LOG_DO_SERVICO[historico]}" "$LOGGER_PROJECAO" "$CONSULTA_ID" "$CORRELATION_ID" 30
+    registrar "historico comprovado: consulta $CONSULTA_ID AGENDADA com o mesmo instante e observacoes, projetada com correlationId"
 }
 
 # ------------------------------------------------------------------ limpeza (D13)
@@ -820,10 +885,11 @@ main() {
     iniciar_servicos
     aguardar_servicos_prontos
     criar_consulta
+    verificar_publicacao
     verificar_notificacao
     verificar_historico
     ETAPA="concluido"
-    registrar "SMOKE APROVADO: login, consulta, notificacao e historico comprovados"
+    registrar "SMOKE APROVADO: login, consulta, notificacao, historico e correlationId $CORRELATION_ID nos tres logs comprovados"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

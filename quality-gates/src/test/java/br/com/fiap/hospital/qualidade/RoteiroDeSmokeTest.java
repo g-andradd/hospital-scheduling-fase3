@@ -182,8 +182,15 @@ class RoteiroDeSmokeTest {
                     Arguments.of("LF", inicio + LINHA.formatted(8123) + "\nStarted\n", "8123|0"),
                     Arguments.of("CRLF", (inicio + LINHA.formatted(8123) + "\nStarted\n").replace("\n", "\r\n"), "8123|0"),
                     Arguments.of("sem a linha", inicio + "Started\n", "|1"),
-                    Arguments.of("duas portas distintas", inicio + LINHA.formatted(8123) + "\n" + LINHA.formatted(8124) + "\n", "|2"));
+                    Arguments.of("duas portas distintas", inicio + LINHA.formatted(8123) + "\n" + LINHA.formatted(8124) + "\n", "|2"),
+                    Arguments.of("JSON do profile docker", inicio + LINHA_JSON.formatted(8123) + "\nStarted\n", "8123|0"));
         }
+
+        /** A mesma linha do Tomcat no formato logstash do profile docker (M11, D7). */
+        private static final String LINHA_JSON = "{\"@timestamp\":\"2026-09-14T10:33:37.009-03:00\",\"@version\":\"1\","
+                + "\"message\":\"Tomcat started on port %d (http) with context path '/'\","
+                + "\"logger_name\":\"org.springframework.boot.web.embedded.tomcat.TomcatWebServer\",\"thread_name\":\"main\","
+                + "\"level\":\"INFO\",\"level_value\":20000,\"service\":\"agendamento-service\"}";
 
         @ParameterizedTest(name = "{0}")
         @MethodSource("logs")
@@ -195,6 +202,74 @@ class RoteiroDeSmokeTest {
                     + ")\" && codigo=0 || codigo=$?; printf '%s|%s' \"$saida\" \"$codigo\"; }");
             assertThat(execucao.erro()).isEmpty();
             assertThat(execucao.saida()).isEqualTo(esperado);
+        }
+    }
+
+    /**
+     * A verificacao de log do roteiro recusa registro ausente e registro divergente, sem jq instalado.
+     *
+     * <p>O {@code jq} e injetado por {@code JQ_BIN} como um script de saida fixa que registra os
+     * argumentos: prova a decisao do roteiro (codigo 3 ou 1) e que a consulta, o logger e a correlacao
+     * da execucao chegam ao filtro. O filtro real e exercido pela execucao real do smoke. O PATH do
+     * Bash e montado sem nenhum diretorio que contenha jq.
+     */
+    @Nested
+    @DisplayName("Scenario: Registro ausente ou com correlação divergente reprova o smoke")
+    class RegistroCorrelacionado {
+
+        private static final String LOGGER = "br.com.fiap.hospital.historico.infrastructure.messaging.ConsumidorTransacionalDoHistorico";
+        private static final String CONSULTA = "0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0";
+        private static final String CORRELACAO = "smoke-20260914000000-abcdef";
+
+        private Execucao verificarCom(String caso, String saidaDoJq) {
+            String jq = TRABALHO + "/jq-" + caso;
+            String argumentos = TRABALHO + "/jq-" + caso + ".argumentos";
+            String log = TRABALHO + "/registro-" + caso + ".log";
+            escrever(jq, "#!/usr/bin/env bash\nprintf '%s\\n' \"$@\" > " + argumentos + "\nprintf '%s' '" + saidaDoJq + "'\n");
+            escrever(log, "{\"message\":\"qualquer\"}\n");
+            return bash("chmod +x " + jq + "; caminho=''; IFS=: read -ra partes <<< \"$PATH\";"
+                    + " for d in \"${partes[@]}\"; do [[ -x \"$d/jq\" || -x \"$d/jq.exe\" ]] || caminho+=\"${caminho:+:}$d\"; done;"
+                    + " PATH=\"$caminho\"; command -v jq >/dev/null && { echo jq-no-path; exit 99; };"
+                    + " source scripts/smoke-test.sh && { JQ_BIN=" + jq + "; inicio=$SECONDS;"
+                    + " ( registro_correlacionado " + log + " " + LOGGER + " " + CONSULTA + " " + CORRELACAO + " 2 )"
+                    + " && codigo=0 || codigo=$?; echo \"codigo=$codigo duracao=$((SECONDS - inicio))\"; }");
+        }
+
+        private static List<String> argumentos(String caso) throws IOException {
+            return Files.readAllLines(PomsDoReactor.RAIZ.resolve(TRABALHO + "/jq-" + caso + ".argumentos"), StandardCharsets.UTF_8)
+                    .stream().map(l -> l.replace("\r", "")).toList();
+        }
+
+        private static void exigirArgumentosDaExecucao(String caso) throws IOException {
+            List<String> recebidos = argumentos(caso);
+            assertThat(recebidos).containsSubsequence("--arg", "logger", LOGGER)
+                    .containsSubsequence("--arg", "consulta", CONSULTA)
+                    .containsSubsequence("--arg", "correlacao", CORRELACAO);
+            assertThat(recebidos.getLast()).isEqualTo(TRABALHO + "/registro-" + caso + ".log");
+        }
+
+        @Test
+        @DisplayName("registro do serviço ausente esgota o prazo curto e termina com código 3")
+        void ausenteTerminaComPrazo() throws IOException {
+            Execucao execucao = verificarCom("ausente", "");
+
+            assertThat(execucao.saida()).startsWith("codigo=3 duracao=");
+            int duracao = Integer.parseInt(execucao.saida().strip().replaceAll(".*duracao=", ""));
+            assertThat(duracao).as("prazo curto do teste, e nao o timeout real do smoke").isBetween(1, 15);
+            assertThat(execucao.erro()).contains("prazo de 2s esgotado aguardando registro JSON de ConsumidorTransacionalDoHistorico da consulta "
+                    + CONSULTA + " com correlationId " + CORRELACAO);
+            exigirArgumentosDaExecucao("ausente");
+        }
+
+        @Test
+        @DisplayName("registro do fluxo com correlationId divergente termina com código 1")
+        void divergenteTerminaComDivergencia() throws IOException {
+            Execucao execucao = verificarCom("divergente", "divergente|true");
+
+            assertThat(execucao.saida()).startsWith("codigo=1 duracao=");
+            assertThat(execucao.erro()).contains("registro de " + LOGGER + " da consulta " + CONSULTA
+                    + " com correlationId diferente de " + CORRELACAO);
+            exigirArgumentosDaExecucao("divergente");
         }
     }
 
