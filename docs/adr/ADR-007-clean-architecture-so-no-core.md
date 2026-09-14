@@ -49,4 +49,8 @@ Descartada. O compilador passaria a impedir a violação da regra de dependênci
 
 ## Status
 
-Aceita. Materializada em `add-agendamento-domain` (M01), que cria `domain` e `application` sem nenhuma dependência de framework. A verificação automática por ArchUnit é do M11.
+Aceita. Materializada em `add-agendamento-domain` (M01), que cria `domain` e `application` sem nenhuma dependência de framework.
+
+Verificada automaticamente desde `add-archunit-observability` (M11): o `ArquiteturaDoAgendamentoTest` roda no build do `agendamento-service`, sobre o código principal compilado, as regras de direção das camadas (inclusive `application` sem `infrastructure`), domínio sem framework, método público único `executar` por caso de uso, entidades JPA só em `infrastructure.persistence`, controllers só com os casos de uso transacionais e ausência de saída padrão. Cada regra tem negativo sintético que prova a recusa.
+
+**Reconciliação com a nota "controller não injeta repositório".** A nota é mantida: nenhum controller depende de repositório, porta de saída, mensageria ou caso de uso sem demarcação transacional. O `AutenticacaoController` depende também do `JwtService`, que não é repositório nem caso de uso — é o emissor de token que a arquitetura põe na fronteira HTTP. Esconder a emissão atrás de um caso de uso levaria o JWT, detalhe de transporte, para dentro de `application`. Por isso a regra admite essa única exceção, nominal: uma classe e um tipo, sem exceção genérica por pacote ou anotação.

@@ -350,7 +350,7 @@ O M10 assume esse teste como trabalho próprio, não remendo:
 **Escopo:** suíte ArchUnit no agendamento, `correlationId` ponta a ponta, Actuator, logs JSON no profile `docker`.
 
 **Notas técnicas obrigatórias**
-- Regras ArchUnit: `domain` não depende de `application` nem `infrastructure`; `domain` sem Spring/JPA/Jackson/Validation; classes `*UseCase` com exatamente um método público; entidades JPA só em `infrastructure.persistence`; controllers não injetam repositório, só caso de uso; nada de `System.out`.
+- Regras ArchUnit: `domain` não depende de `application` nem `infrastructure`; `domain` sem Spring/JPA/Jackson/Validation; classes `*UseCase` com exatamente um método público; entidades JPA só em `infrastructure.persistence`; controllers não injetam repositório, só caso de uso; nada de `System.out`. Única exceção nominal, reconciliada no ADR-007: o `JwtService` no `AutenticacaoController`, porque a emissão do token pertence à fronteira HTTP.
 - `correlationId`: **o filtro HTTP foi antecipado para o M03**, porque o `ProblemDetail` do §8 já exige o campo. Aqui resta a propagação: header AMQP no relay do outbox → MDC no consumidor, nos dois serviços. O filtro em si só precisa ser replicado no notificacao e no historico. O mesmo id tem que aparecer nos três logs para um único fluxo.
 - Actuator expõe `health`, `info`, `metrics`, `prometheus`. **Nunca** `env` ou `beans`.
 
