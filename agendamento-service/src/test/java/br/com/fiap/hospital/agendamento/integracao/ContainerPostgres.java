@@ -24,6 +24,11 @@ public final class ContainerPostgres {
 
     private ContainerPostgres() {}
 
+    /** O container da suite, para a evidencia runtime do RNF-06 conferir o endereco que o contexto recebeu. */
+    static PostgreSQLContainer<?> instancia() {
+        return INSTANCIA;
+    }
+
     public static void registrarPropriedades(DynamicPropertyRegistry registro) {
         registro.add("spring.datasource.url", INSTANCIA::getJdbcUrl);
         credenciaisEPool(registro);

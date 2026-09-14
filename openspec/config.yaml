@@ -23,6 +23,8 @@ context: |
   agendamento-service :8081 — escrita, REST, autenticação, Clean Architecture, Outbox
   notificacao-service :8082 — consome eventos, confirmações e lembrete D-1
   historico-service   :8083 — projeta eventos em read model, expõe GraphQL
+  quality-gates       (técnico) — agrega JaCoCo e aplica os gates do build; só JDK,
+                      sem Spring e sem aplicação; nenhum módulo de código depende dele
 
   CAPABILITIES (organizam openspec/specs/)
   autenticacao-e-autorizacao · agendamento-de-consultas · mensageria-de-eventos

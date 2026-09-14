@@ -27,7 +27,7 @@
         <dependency>
             <groupId>br.com.fiap.hospital</groupId>
             <artifactId>shared-contracts</artifactId>
-            <version>${revision}</version>
+            <version>${project.version}</version>
         </dependency>
 
         <dependency>
@@ -46,7 +46,7 @@
         <dependency>
             <groupId>br.com.fiap.hospital</groupId>
             <artifactId>shared-security</artifactId>
-            <version>${revision}</version>
+            <version>${project.version}</version>
         </dependency>
         <dependency>
             <groupId>org.springdoc</groupId>
@@ -74,8 +74,8 @@
 
         <!--
             Declarados explicitamente, embora venham pelo starter-test: o mockito-core
-            precisa ser dependencia resolvida para que o dependency:properties exponha
-            ${org.mockito:mockito-core:jar} ao surefire.
+            precisa ser dependencia resolvida para que o dependency:copy-dependencies o
+            copie para target/agentes, de onde o surefire o carrega como java agent.
         -->
         <dependency>
             <groupId>org.mockito</groupId>
@@ -106,6 +106,16 @@
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Exemplar canonico do contrato de eventos, a mesma copia dos consumidores. -->
+        <dependency>
+            <groupId>br.com.fiap.hospital</groupId>
+            <artifactId>shared-contracts</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <classifier>tests</classifier>
             <scope>test</scope>
         </dependency>
     </dependencies>

@@ -39,8 +39,7 @@ class TradutorDeExcecoesDoResolver extends DataFetcherExceptionResolverAdapter {
             log.error("Falha inesperada em {}", ambiente.getExecutionStepInfo().getPath(), excecao);
         }
         return graphql.GraphqlErrorBuilder.newError(ambiente)
-                .message(erro.sanitizar(erro == ErroDoHistorico.INTERNAL_ERROR
-                        ? null : excecao.getMessage()))
+                .message(erro.sanitizar(mensagemDoServico(excecao, erro)))
                 .errorType(erro)
                 .extensions(Map.of("code", erro.name()))
                 .build();
@@ -53,10 +52,35 @@ class TradutorDeExcecoesDoResolver extends DataFetcherExceptionResolverAdapter {
         if (excecao instanceof ExcecoesDoHistorico.RegistroNaoEncontrado) {
             return ErroDoHistorico.NOT_FOUND;
         }
+        // Falha ao ligar o argumento ao tipo declarado: o valor recebido nao encaixa no
+        // schema que o proprio servico publica. Isso e erro do cliente por definicao, e sem
+        // esta linha um ID que nao e UUID saia como erro interno. A classificacao e nominal
+        // — so esta excecao, e nao uma varredura de causas que rebaixasse falha de banco a
+        // erro de entrada.
+        if (excecao instanceof org.springframework.validation.BindException) {
+            return ErroDoHistorico.BAD_REQUEST;
+        }
         if (excecao instanceof ExcecoesDoHistorico.CorrecaoInvalida
                 || excecao instanceof IllegalArgumentException) {
             return ErroDoHistorico.BAD_REQUEST;
         }
         return ErroDoHistorico.INTERNAL_ERROR;
+    }
+
+
+    /**
+     * So o texto que o proprio servico escreveu chega ao cliente.
+     *
+     * <p>As recusas de dominio trazem mensagem util — qual campo, qual limite —, e ela passa.
+     * A falha de binding, nao: a mensagem dela e do framework e cita pacote e classe, isto e,
+     * descreve a implementacao para quem esta do lado de fora. Nesse caso vale a mensagem
+     * padrao da categoria.
+     */
+    private static String mensagemDoServico(Throwable excecao, ErroDoHistorico erro) {
+        if (erro == ErroDoHistorico.INTERNAL_ERROR
+                || excecao instanceof org.springframework.validation.BindException) {
+            return null;
+        }
+        return excecao.getMessage();
     }
 }

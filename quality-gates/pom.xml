@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>br.com.fiap.hospital</groupId>
+        <artifactId>hospital-scheduling-fase3</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>quality-gates</artifactId>
+    <packaging>jar</packaging>
+
+    <name>quality-gates</name>
+    <description>
+        Modulo tecnico: agrega a cobertura dos cinco modulos de codigo e aplica os gates do
+        build. Sem aplicacao, sem regra de negocio, sem Spring — o codigo principal usa so o JDK.
+    </description>
+
+    <!--
+        As cinco dependencias internas existem para o report-aggregate enxergar classes,
+        fontes e dados de execucao de cada modulo de codigo, e para o reactor construir este
+        modulo por ultimo. Todas em compile: segundo a documentacao do report-aggregate, test
+        forneceria apenas dados de execucao.
+
+        A exclusao total de transitivos e deliberada. O agregado so precisa do proprio modulo;
+        sem a exclusao, o classpath deste modulo herdaria Spring Boot, JPA e Testcontainers
+        dos servicos, e "modulo tecnico sem Spring" deixaria de ser verdade no classpath.
+    -->
+    <dependencies>
+        <dependency>
+            <groupId>br.com.fiap.hospital</groupId>
+            <artifactId>shared-contracts</artifactId>
+            <version>${project.version}</version>
+            <exclusions>
+                <exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>br.com.fiap.hospital</groupId>
+            <artifactId>shared-security</artifactId>
+            <version>${project.version}</version>
+            <exclusions>
+                <exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>br.com.fiap.hospital</groupId>
+            <artifactId>agendamento-service</artifactId>
+            <version>${project.version}</version>
+            <exclusions>
+                <exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>br.com.fiap.hospital</groupId>
+            <artifactId>notificacao-service</artifactId>
+            <version>${project.version}</version>
+            <exclusions>
+                <exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>br.com.fiap.hospital</groupId>
+            <artifactId>historico-service</artifactId>
+            <version>${project.version}</version>
+            <exclusions>
+                <exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion>
+            </exclusions>
+        </dependency>
+
+        <!-- Bibliotecas externas dos testes do proprio modulo: somente test. -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+                O argLine herdado acrescenta o Mockito como java agent, copiado para
+                target/agentes. Este modulo nao usa Mockito e nao o declara so para
+                satisfazer a linha: sem a sobreposicao, a JVM dos testes nao subiria. O
+                @{argLine} continua compondo com o agente do JaCoCo.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>@{argLine}</argLine>
+                </configuration>
+            </plugin>
+
+            <!--
+                Gates da fase verify, nesta ordem (D3):
+                  1. relatorio-agregado  — jacoco:report-aggregate dos cinco modulos de codigo;
+                  2. auditoria-de-execucao — exec da AuditoriaDeExecucao (D5, secao 6);
+                  3. gate-de-cobertura   — exec do VerificadorDeCobertura (D4).
+                O report-aggregate e do jacoco-maven-plugin, que e herdado da raiz e por isso
+                roda antes das execucoes do exec-maven-plugin na mesma fase. As duas execucoes do
+                exec seguem a ordem de declaracao: a auditoria, quando existir, entra ANTES do
+                gate-de-cobertura. Uma inversao reprova fechado.
+
+                A exclusao **/*Application.class vem da configuracao herdada do plugin e vale
+                tambem para o agregado. includeCurrentProject fica no padrao (false): o proprio
+                quality-gates nao entra no relatorio.
+            -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>relatorio-agregado</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report-aggregate</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!--
+                Roda na JVM do proprio Maven, so com as classes deste modulo no classpath: o
+                verificador usa apenas o JDK. Saida diferente de zero reprova o lifecycle.
+            -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>${exec-maven-plugin.version}</version>
+                <executions>
+                    <!--
+                        Auditoria da execucao integral (D5): recebe a raiz, o identificador da
+                        sessao, cada propriedade de selecao, exclusao, omissao e tolerancia da
+                        tabela do D5 e cada canal de parametros do JUnit Platform, como nome=valor.
+                        Uma propriedade nao definida chega como o literal ${...}; uma que falte aqui
+                        reprova, porque a recusa nao pode ser conferida. Declarada ANTES do gate-de-cobertura: execucoes do mesmo plugin
+                        na mesma fase seguem a ordem de declaracao.
+                    -->
+                    <execution>
+                        <id>auditoria-de-execucao</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <executable>${java.home}/bin/java</executable>
+                            <arguments>
+                                <argument>-cp</argument>
+                                <argument>${project.build.outputDirectory}</argument>
+                                <argument>br.com.fiap.hospital.qualidade.AuditoriaDeExecucao</argument>
+                                <argument>${project.basedir}/..</argument>
+                                <argument>${sessao.verificacao}</argument>
+                                <argument>test=${test}</argument>
+                                <argument>it.test=${it.test}</argument>
+                                <argument>surefire.includes=${surefire.includes}</argument>
+                                <argument>failsafe.includes=${failsafe.includes}</argument>
+                                <argument>surefire.includesFile=${surefire.includesFile}</argument>
+                                <argument>failsafe.includesFile=${failsafe.includesFile}</argument>
+                                <argument>surefire.excludes=${surefire.excludes}</argument>
+                                <argument>failsafe.excludes=${failsafe.excludes}</argument>
+                                <argument>surefire.excludesFile=${surefire.excludesFile}</argument>
+                                <argument>failsafe.excludesFile=${failsafe.excludesFile}</argument>
+                                <argument>groups=${groups}</argument>
+                                <argument>excludedGroups=${excludedGroups}</argument>
+                                <argument>surefire.includeJUnit5Engines=${surefire.includeJUnit5Engines}</argument>
+                                <argument>surefire.excludeJUnit5Engines=${surefire.excludeJUnit5Engines}</argument>
+                                <argument>failsafe.includeJUnit5Engines=${failsafe.includeJUnit5Engines}</argument>
+                                <argument>failsafe.excludeJUnit5Engines=${failsafe.excludeJUnit5Engines}</argument>
+                                <argument>surefire.suiteXmlFiles=${surefire.suiteXmlFiles}</argument>
+                                <argument>failsafe.suiteXmlFiles=${failsafe.suiteXmlFiles}</argument>
+                                <argument>dependenciesToScan=${dependenciesToScan}</argument>
+                                <argument>skipTests=${skipTests}</argument>
+                                <argument>skipITs=${skipITs}</argument>
+                                <argument>maven.test.skip=${maven.test.skip}</argument>
+                                <argument>maven.test.skip.exec=${maven.test.skip.exec}</argument>
+                                <argument>surefire.skipAfterFailureCount=${surefire.skipAfterFailureCount}</argument>
+                                <argument>failsafe.skipAfterFailureCount=${failsafe.skipAfterFailureCount}</argument>
+                                <argument>maven.test.failure.ignore=${maven.test.failure.ignore}</argument>
+                                <argument>surefire.rerunFailingTestsCount=${surefire.rerunFailingTestsCount}</argument>
+                                <argument>failsafe.rerunFailingTestsCount=${failsafe.rerunFailingTestsCount}</argument>
+                                <argument>surefire.failIfNoSpecifiedTests=${surefire.failIfNoSpecifiedTests}</argument>
+                                <argument>failsafe.failIfNoSpecifiedTests=${failsafe.failIfNoSpecifiedTests}</argument>
+                                <argument>it.failIfNoSpecifiedTests=${it.failIfNoSpecifiedTests}</argument>
+                                <!-- Canais de parametros do JUnit Platform que alcancam a JVM de teste. -->
+                                <argument>junit.platform.execution.dryRun.enabled=${junit.platform.execution.dryRun.enabled}</argument>
+                                <argument>junit.platform.discovery.listener.default=${junit.platform.discovery.listener.default}</argument>
+                                <argument>argLine=${argLine}</argument>
+                                <argument>surefire.systemPropertiesFile=${surefire.systemPropertiesFile}</argument>
+                                <argument>failsafe.systemPropertiesFile=${failsafe.systemPropertiesFile}</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>gate-de-cobertura</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <executable>${java.home}/bin/java</executable>
+                            <arguments>
+                                <argument>-cp</argument>
+                                <argument>${project.build.outputDirectory}</argument>
+                                <argument>br.com.fiap.hospital.qualidade.VerificadorDeCobertura</argument>
+                                <argument>${project.build.directory}/site/jacoco-aggregate/jacoco.xml</argument>
+                                <argument>${project.basedir}/..</argument>
+                                <argument>${sessao.verificacao}</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

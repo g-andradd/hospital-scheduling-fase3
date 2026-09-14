@@ -44,6 +44,10 @@ public enum TipoDeErro {
             "motivo-de-cancelamento-obrigatorio", "Motivo de cancelamento obrigatorio",
             HttpStatus.UNPROCESSABLE_ENTITY),
 
+    TEXTO_COM_CARACTERE_INVALIDO(
+            "texto-com-caractere-invalido", "Texto com caractere invalido",
+            HttpStatus.UNPROCESSABLE_ENTITY),
+
     ALTERACAO_CONCORRENTE(
             "alteracao-concorrente", "Alteracao concorrente", HttpStatus.CONFLICT),
 

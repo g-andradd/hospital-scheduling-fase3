@@ -119,6 +119,26 @@ class CoberturaDoMapaDeErrosTest {
                 .isNotEqualTo(TipoDeErro.ALTERACAO_CONCORRENTE.type());
     }
 
+    /**
+     * Violacao de integridade continua sendo falha do servico.
+     *
+     * <p>Ao fechar o 500 do limite de intervalo fora da faixa, a saida facil seria
+     * traduzir {@code DataIntegrityViolationException} para 4xx e fazer o sintoma sumir.
+     * Isso esconderia toda violacao de integridade real — chave duplicada, restricao de
+     * sobreposicao, referencia quebrada — atras de um "erro do cliente". A recusa tem de
+     * acontecer antes, na entrada; aqui se garante que ninguem tomou o atalho.
+     */
+    @Test
+    @DisplayName("violação de integridade não ganha tradutor genérico no advice")
+    void violacaoDeIntegridadeNaoTemTradutorGenerico() {
+        assertThat(excecoesComTratador())
+                .as("traduzir a excecao de integridade transformaria defeito de servidor "
+                        + "em erro do cliente; a recusa pertence a borda de entrada")
+                .doesNotContain(
+                        org.springframework.dao.DataIntegrityViolationException.class,
+                        org.springframework.dao.DataAccessException.class);
+    }
+
     @Test
     @DisplayName("nenhum type se repete entre categorias")
     void nenhumTypeSeRepete() {

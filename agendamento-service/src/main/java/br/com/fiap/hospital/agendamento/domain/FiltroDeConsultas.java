@@ -38,6 +38,12 @@ public record FiltroDeConsultas(
     public FiltroDeConsultas {
         status = status == null ? Set.of() : Set.copyOf(status);
 
+        // Os limites do intervalo viram parametro de SQL. Fora da faixa representavel,
+        // quem recusa e o banco, com violacao de integridade — 500 por um parametro de
+        // query. A recusa precisa acontecer aqui, antes do repositorio.
+        FaixaTemporalSuportada.exigirSuportado(de, "de");
+        FaixaTemporalSuportada.exigirSuportado(ate, "ate");
+
         // Tamanho e pagina sao limitados no mesmo lugar, mas de formas diferentes de
         // proposito. Tamanho excessivo e pedido razoavel mal calibrado — quem manda
         // size=100000 quer "o maximo possivel", e aparar responde exatamente isso.

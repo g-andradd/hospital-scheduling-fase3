@@ -152,6 +152,10 @@ public class Consulta {
             String novasObservacoes,
             OffsetDateTime agora) {
         exigirAlteracaoValida(novoPeriodo, agora);
+        // Antes de qualquer mutacao: uma recusa depois de o periodo ja ter sido trocado
+        // deixaria a entidade gerenciada alterada, e o flush do commit persistiria a
+        // alteracao recusada.
+        TextoRepresentavel.exigirRepresentavel(novasObservacoes, "observacoes");
 
         if (novoPeriodo != null && !novoPeriodo.equals(periodo)) {
             this.periodo = novoPeriodo;
@@ -190,8 +194,18 @@ public class Consulta {
         if (motivo == null || motivo.isBlank()) {
             throw new MotivoDeCancelamentoObrigatorioException();
         }
+        // NUL e recusado antes de qualquer mutacao: nem a coluna nem o outbox o gravam.
+        TextoRepresentavel.exigirRepresentavel(motivo, "motivo");
+        // Um motivo so de caracteres de controle nao e "branco" para o isBlank acima, mas o
+        // trim o esvazia. Vazio depois de aparado e motivo vazio — a regra de sempre —, e
+        // precisa ser recusado aqui, antes do cancelamento, e nao descoberto quando o
+        // contrato de eventos recusasse um motivo obrigatorio vazio.
+        String motivoNormalizado = motivo.trim();
+        if (motivoNormalizado.isEmpty()) {
+            throw new MotivoDeCancelamentoObrigatorioException();
+        }
         this.status = StatusConsulta.CANCELADA;
-        this.motivoCancelamento = motivo.trim();
+        this.motivoCancelamento = motivoNormalizado;
         this.atualizadoEm = agora;
     }
 
@@ -233,10 +247,22 @@ public class Consulta {
             throw new AgendamentoForaDoHorizonteException(
                     periodo.inicio(), limite, HORIZONTE_MAXIMO_MESES);
         }
+        // O horizonte vale para o periodo inteiro, e nao so para o seu inicio. Sem esta
+        // verificacao, uma duracao no teto do inteiro passava: a consulta era aceita e
+        // ocupava a agenda do medico por milenios, bloqueando qualquer horario seguinte.
+        //
+        // A comparacao e feita em minutos disponiveis, e nunca somando a duracao ao
+        // inicio: e a propria soma que estoura a aritmetica nas duracoes extremas.
+        long minutosAteOLimite =
+                java.time.temporal.ChronoUnit.MINUTES.between(periodo.inicio(), limite);
+        if (periodo.duracaoMinutos() > minutosAteOLimite) {
+            throw AgendamentoForaDoHorizonteException.porFimDoPeriodo(
+                    periodo.inicio(), periodo.duracaoMinutos(), limite, HORIZONTE_MAXIMO_MESES);
+        }
     }
 
     private static String normalizar(String texto) {
-        return texto == null || texto.isBlank() ? null : texto.trim();
+        return TextoRepresentavel.normalizarOpcional(texto, "observacoes");
     }
 
     public UUID id() {
