@@ -1,0 +1,10 @@
+# Profile docker: logs do console em JSON, um objeto por linha (RNF-08). O formato logstash nativo
+# do Spring Boot poe cada chave do MDC como campo proprio, inclusive o correlationId. Sem este
+# profile, o log continua no formato textual padrao.
+logging:
+  structured:
+    format:
+      console: logstash
+    json:
+      add:
+        service: agendamento-service

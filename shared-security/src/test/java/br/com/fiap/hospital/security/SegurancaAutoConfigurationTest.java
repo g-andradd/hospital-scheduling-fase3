@@ -244,6 +244,54 @@ class SegurancaAutoConfigurationTest {
                 });
     }
 
+    /**
+     * Os caminhos operacionais: health publico, os quatro demais com qualquer token, e todo
+     * outro actuator negado mesmo com token.
+     *
+     * <p>A prova de {@code env} e {@code beans} usa token de proposito: sem ele os dois
+     * responderiam 401 tanto negados quanto apenas autenticados, e um curinga
+     * {@code /actuator/**} passaria despercebido.
+     */
+    @Test
+    @DisplayName("health e publico, operacionais exigem token e o resto do actuator e negado")
+    void caminhosOperacionaisNaCadeiaCompartilhada() {
+        contexto.run(ctx -> {
+            SecurityFilterChain cadeia = ctx.getBean(SecurityFilterChain.class);
+            String token = ctx.getBean(JwtService.class).emitir(new UsuarioAutenticado(
+                    java.util.UUID.randomUUID(), "paciente@hospital.com", "PACIENTE",
+                    java.util.UUID.randomUUID(), null));
+
+            for (String publico : List.of("/actuator/health", "/actuator/health/liveness")) {
+                assertThat(alcancaOAlvo(cadeia, semToken(publico), new MockHttpServletResponse()))
+                        .as("%s e publico", publico).isTrue();
+            }
+            assertThat(SegurancaAutoConfiguration.OPERACIONAIS_AUTENTICADOS).containsExactly(
+                    "/actuator", "/actuator/info", "/actuator/metrics", "/actuator/metrics/**",
+                    "/actuator/prometheus");
+            for (String operacional : List.of("/actuator", "/actuator/info", "/actuator/metrics",
+                    "/actuator/metrics/jvm.memory.used", "/actuator/prometheus")) {
+                MockHttpServletResponse semCredencial = new MockHttpServletResponse();
+                assertThat(alcancaOAlvo(cadeia, semToken(operacional), semCredencial))
+                        .as("%s sem token", operacional).isFalse();
+                assertThat(semCredencial.getStatus()).isEqualTo(HttpServletResponse.SC_UNAUTHORIZED);
+                assertThat(alcancaOAlvo(cadeia, comToken("GET", operacional, token), new MockHttpServletResponse()))
+                        .as("%s com token de qualquer perfil", operacional).isTrue();
+            }
+            for (String negado : List.of("/actuator/env", "/actuator/beans", "/actuator/configprops")) {
+                MockHttpServletResponse comCredencial = new MockHttpServletResponse();
+                assertThat(alcancaOAlvo(cadeia, comToken("GET", negado, token), comCredencial))
+                        .as("%s nao pode alcancar handler nem com token", negado).isFalse();
+                assertThat(comCredencial.getStatus()).isEqualTo(HttpServletResponse.SC_FORBIDDEN);
+            }
+        });
+    }
+
+    private static MockHttpServletRequest semToken(String caminho) {
+        MockHttpServletRequest requisicao = new MockHttpServletRequest("GET", caminho);
+        requisicao.setServletPath(caminho);
+        return requisicao;
+    }
+
     private static MockHttpServletRequest comToken(String metodo, String caminho, String token) {
         MockHttpServletRequest requisicao = new MockHttpServletRequest(metodo, caminho);
         // Com o DispatcherServlet mapeado em "/", o container poe o caminho inteiro no

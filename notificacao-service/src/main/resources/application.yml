@@ -46,6 +46,29 @@ spring:
           multiplier: 2.0
           max-interval: 10000ms
 
+management:
+  endpoints:
+    web:
+      exposure:
+        # Allowlist exata. env, beans e o curinga nunca entram: expoem configuracao e a
+        # composicao interna. health e publico; os demais exigem token na cadeia compartilhada.
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+  prometheus:
+    metrics:
+      export:
+        # Explicito: o padrao ja e true, mas o @SpringBootTest desliga a exportacao de metricas
+        # por omissao, e sem isto o endpoint prometheus nao existiria nos testes de integracao.
+        enabled: true
+  health:
+    mail:
+      # O sender padrao e log: o starter de mail nao torna o SMTP dependencia operacional ativa
+      # (D5). Quando o M12 ativar notificacao.sender=smtp com o Mailpit, decide la se reabilita.
+      enabled: false
+
 server:
   port: 8082
 
