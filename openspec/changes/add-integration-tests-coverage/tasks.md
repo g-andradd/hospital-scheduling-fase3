@@ -97,7 +97,7 @@
 - [x] 4.11 GraphQL: confirmar pelo diff e pela execução que `MatrizDeAutorizacaoGraphqlIT` (15 células), `CoberturaDeAutorizacaoGraphqlTest`, `ErrosGraphqlIT`, `SegurancaGraphqlIT` e `EntradasHostisHistoricoIT` estão intactos e verdes.
 - [x] 4.12 Notificação: criar o `SuperficieHttpNotificacaoIT` sobre `NotificacaoITBase` (D9). Ele exige exatamente `POST /internal/lembretes/executar`, classificado como sem entrada de negócio, e reprova parâmetro ou handler novo. Criar também um negativo com handler sintético. Confirmar que `MatrizDeAutorizacaoNotificacaoIT` (3 células) e `DisparoManualIT` estão intactos e verdes.
 - [x] 4.13 Medir e registrar o tempo do `EntradasHostisIT` e do `EntradasHostisGraphqlIT`. Se algum passar de 2 minutos, **parar** e reportar ao Gabriel, sem cortar variantes.
-- [ ] 4.14 Registrar no PR a conferência determinística dos sete achados do M03:
+- [x] 4.14 Registrar no PR a conferência determinística dos sete achados do M03:
   - PR7 (`discussion_r3928689668`): coberto por CORPO;
   - PR8 (`discussion_r3929008553`): coberto por CORPO e TEXTO de `motivo`;
   - PR8 (`discussion_r3929008559`): coberto pela asserção de vazamento, mais UUID, ENUM e DATA de consulta;
@@ -134,7 +134,7 @@ Verde, com as contagens registradas.
 
 ## 5. Módulo técnico, sessão de verificação e gate de cobertura (D3 e D4)
 
-- [ ] 5.1 Confirmar no PR a aprovação do Gabriel para a delta MODIFIED "Build reprodutível do monorepo". Sem ela, parar.
+- [x] 5.1 Confirmar no PR a aprovação do Gabriel para a delta MODIFIED "Build reprodutível do monorepo". Sem ela, parar.
 - [x] 5.2 Criar `quality-gates/pom.xml` com parent no POM raiz e `packaging jar`, com:
   - exatamente **cinco dependências internas do reactor** — `shared-contracts`, `shared-security` e os três serviços —, todas em escopo `compile` padrão;
   - bibliotecas externas dos próprios testes (JUnit, AssertJ) somente em escopo `test`, fora dessa contagem.
@@ -410,18 +410,18 @@ Os negativos automatizados da parte A estão nas tasks 2.1, 4.3, 4.4, 4.9, 4.12,
 - [x] 13.3 Acrescentar a `docs/03-contrato-de-eventos.md` §7 a linha "Fixture canônica exercitada por produtor e consumidores | M10".
 - [x] 13.4 Atualizar `docs/05-fluxo-de-trabalho.md` §4 e §6 com `mvn -q clean verify` e `scripts/smoke-test.sh` na release e na DoD.
 - [x] 13.5 Acrescentar ao ADR-003 um adendo datado registrando o módulo técnico — sexto módulo filho e sétimo projeto do reactor — e a razão da escolha.
-- [ ] 13.6 Registrar no corpo do PR que `CHANGELOG.md` e versão ficam para o fechamento da release 1.0.0. O `openspec/config.yaml` já foi atualizado na task 5.2.
+- [x] 13.6 Registrar no corpo do PR que `CHANGELOG.md` e versão ficam para o fechamento da release 1.0.0. O `openspec/config.yaml` já foi atualizado na task 5.2.
 
 ## 14. Verificação final dos artefatos
 
-- [ ] 14.1 Montar no PR a matriz Scenario → evidência para **todos os 84 Scenarios**: 48 em `operacao-do-ambiente`, 8 em `mensageria-de-eventos`, 13 em `agendamento-de-consultas` e 15 em `historico-de-consultas`. A evidência é a classe e o método de teste, ou, no smoke, o comando registrado. Verificar que nenhum Scenario fica sem evidência.
-- [ ] 14.2 Conferir pelo diff:
+- [x] 14.1 Montar no PR a matriz Scenario → evidência para **todos os 84 Scenarios**: 48 em `operacao-do-ambiente`, 8 em `mensageria-de-eventos`, 13 em `agendamento-de-consultas` e 15 em `historico-de-consultas`. A evidência é a classe e o método de teste, ou, no smoke, o comando registrado. Verificar que nenhum Scenario fica sem evidência.
+- [x] 14.2 Conferir pelo diff:
   - nada de M11 ou M12: nem Dockerfile, Compose das aplicações, Mailpit, seed de consultas, Actuator ou health; nem `correlationId` em log, ArchUnit ou Makefile;
   - contrato, topologia de mensageria, schema GraphQL, garantias de mensageria e matrizes inalterados;
   - nenhuma proteção estrutural existente removida;
   - o classifier `exec` preservando o jar principal;
   - os pisos de 85% e 90% intactos.
-- [ ] 14.3 Confirmar a prontidão para archive:
+- [x] 14.3 Confirmar a prontidão para archive:
   - todas as tasks implementáveis anteriores, de 1.1 a 14.2, concluídas;
   - `openspec status --change add-integration-tests-coverage` e `openspec validate add-integration-tests-coverage --strict` verdes.
 
