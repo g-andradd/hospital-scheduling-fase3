@@ -175,7 +175,7 @@ Protocolo: SHA-256 antes, alterar só o alvo, menor gate vermelho, restaurar byt
   - guarda de infraestrutura aprovada;
   - gate de cobertura com os pisos de 85%, 90% e 90%.
 - [x] 10.3 Registrar a cobertura do código novo — filtros, MDC do histórico, logs de sucesso e caminhos operacionais — pelo relatório agregado, e confirmar que nenhuma exclusão de cobertura foi acrescentada.
-- [ ] 10.4 Clone limpo: clonar a feature branch, depois do push e com autorização do Gabriel, num diretório criado com `mktemp -d` e validado sob `${TMPDIR:-/tmp}`, com repositório Maven temporário vazio e sem `install`. Executar **somente** `mvn -q -Dmaven.repo.local=<repo> clean verify`. Registrar código 0 e a ausência de artefato interno no repositório temporário. O smoke não é executado no clone; a execução real única da 7.1 na árvore da feature é a evidência runtime.
+- [x] 10.4 Clone limpo: clonar a feature branch, depois do push e com autorização do Gabriel, num diretório criado com `mktemp -d` e validado sob `${TMPDIR:-/tmp}`, com repositório Maven temporário vazio e sem `install`. Executar **somente** `mvn -q -Dmaven.repo.local=<repo> clean verify`. Registrar código 0 e a ausência de artefato interno no repositório temporário. O smoke não é executado no clone; a execução real única da 7.1 na árvore da feature é a evidência runtime.
 - [ ] 10.5 Conferir pelo diff:
   - nada de M12, M13 ou M14;
   - contrato, topologia, schema GraphQL, migrations, regras de negócio, matrizes e garantias inalterados;
