@@ -70,6 +70,141 @@ Testes são separados por convenção de nome:
 | `mvn test` | apenas `*Test.java` (surefire) — unitários, rápidos, sem container |
 | `mvn verify` | `*Test.java` **e** `*IT.java` (failsafe) — inclui integração com Testcontainers |
 
+## Gate de qualidade, auditoria e smoke (M10)
+
+### Gate global
+
+O gate é um único comando na raiz, **sem filtro de teste**:
+
+```bash
+mvn -q clean verify
+```
+
+O reactor tem sete projetos: a raiz, os cinco módulos de código e o módulo técnico
+`quality-gates`, construído por último. Sem aplicação e sem Spring, ele roda na fase `verify`,
+nesta ordem:
+
+1. **relatório agregado** do JaCoCo dos cinco módulos, em
+   `quality-gates/target/site/jacoco-aggregate/index.html`, com o `jacoco.xml` ao lado;
+2. **auditoria de execução**, que imprime suítes, relatórios e casos por módulo;
+3. **gate de cobertura**, por linhas: **85%** global e **90%** em `agendamento/domain` e em
+   `agendamento/application`. Os pisos não são rebaixados, e código não é excluído para
+   alcançá-los.
+
+A **sessão de verificação** amarra as três etapas ao build corrente. Na fase `initialize` do
+projeto raiz, ela apaga as evidências anteriores: `jacoco.exec`, relatórios do surefire e do
+failsafe e o relatório agregado. Depois grava o identificador da sessão em
+`target/sessao-de-verificacao/sessao.txt`. A auditoria e o gate só aceitam esse marcador. Um
+relatório residual de outro build não passa, e qualquer build Maven que inclua a raiz — como o do
+smoke — recomeça a sessão.
+
+A **auditoria** confere a evidência por suíte e por família de relatórios `TEST-*.xml` —
+externa e aninhadas, por nome binário. Ela recusa:
+- filtro de seleção por parâmetro (`-Dtest`, `-Dit.test`, includes e excludes, `groups`,
+  motores, `dependenciesToScan`);
+- omissão (`skipTests`, `skipITs`, `maven.test.skip`) e tolerância (`maven.test.failure.ignore`,
+  `rerunFailingTestsCount`, `skipAfterFailureCount`);
+- os mesmos mecanismos declarados nos POMs e perfis, inclusive por alias sobrescrevível pela
+  linha de comando;
+- parâmetros do JUnit Platform que não executam testes;
+- `@Disabled`, condições e suposições no código de teste, e caso `skipped`.
+
+O limite é explícito: a soma de casos não prova a execução de cada método. A garantia vem da
+recusa desses mecanismos. Para iterar sem acionar os gates globais, use as suítes dirigidas:
+
+```bash
+mvn -q -pl shared-contracts,agendamento-service,notificacao-service,historico-service -am verify \
+  -Dtest='FixtureCanonicaTest,FixtureCompartilhadaTest,ComparacaoComFixtureTest,InventarioDaSuperficieTest,InventarioGraphqlTest' \
+  -Dit.test='CompatibilidadeDoProdutorComFixtureIT,ConsumoDaFixture*IT,EntradasHostisIT,EntradasHostisGraphqlIT,SuperficieHttpNotificacaoIT,InfraestruturaReal*IT' \
+  -Dsurefire.failIfNoSpecifiedTests=false -Dfailsafe.failIfNoSpecifiedTests=false
+```
+
+```bash
+mvn -q -pl quality-gates -am test \
+  -Dtest='SessaoDeVerificacaoTest,AgregacaoDoReactorTest,ExclusoesDeCoberturaTest,VerificadorDeCoberturaTest,AuditoriaDeExecucaoTest,InfraestruturaRealTest,RoteiroDeSmokeTest' \
+  -Dsurefire.failIfNoSpecifiedTests=false
+```
+
+A **infraestrutura real** também é verificada. O `InfraestruturaRealTest` recusa, nos `*IT` e
+nas bases e configurações que eles alcançam:
+- dublê de fonte de dados, JDBC, gerenciador de entidades, repositório, fábrica de conexões ou
+  template AMQP;
+- banco em memória, broker embarcado e `replace` diferente de `NONE`;
+- imagem diferente de `postgres:16` e `rabbitmq:3.13-management`.
+
+Espião, decorador e dublê de porta externa continuam permitidos. Cada módulo com container
+comprova em runtime a infraestrutura que usa — e só ela — num `InfraestruturaReal*IT`:
+PostgreSQL 16 e RabbitMQ 3.13 nos três serviços, só RabbitMQ no `shared-contracts`.
+
+### Fixture canônica do contrato
+
+`shared-contracts/src/test/resources/evento-consulta.json` é a **única cópia** do exemplar do
+envelope. O `shared-contracts` a publica num test-jar (`classifier` `tests`) que contém apenas o
+JSON, e os três serviços dependem dele em escopo `test`:
+- o produtor compara com o exemplar a mensagem que chegou pelo broker real;
+- cada consumidor processa os bytes exatos do exemplar pelo RabbitMQ real.
+
+Não copie o arquivo para um serviço: o `FixtureCanonicaTest` e o `FixtureCompartilhadaTest`
+recusam segunda cópia e sombreamento.
+
+### Smoke ponta a ponta
+
+```bash
+scripts/smoke-test.sh
+```
+
+O roteiro não usa Compose nem imagens das aplicações, e não depende de estado prévio.
+
+**Pré-requisitos**, conferidos antes de criar qualquer recurso: Bash 4 ou superior (no Windows,
+o Git Bash), Docker com o daemon acessível, Java 21, Maven, curl e jq 1.6 ou superior.
+
+**O que ele faz, em ordem:**
+1. um build único,
+   `mvn -q -DskipTests package -pl agendamento-service,notificacao-service,historico-service -am`,
+   que precisa deixar exatamente um `*-exec.jar` por serviço;
+2. PostgreSQL 16 e RabbitMQ 3.13 efêmeros, com portas dinâmicas em `127.0.0.1` e credenciais
+   aleatórias;
+3. os três serviços como processos `java -jar`, com porta atribuída pelo sistema e o mesmo
+   `JWT_SECRET` aleatório;
+4. login do médico do seed de demonstração;
+5. criação de uma consulta a 30 dias, com observação `smoke-<RUN_ID>`;
+6. a notificação comprovada pelo registro persistido e pela linha do canal de log com o mesmo
+   conteúdo;
+7. a mesma consulta lida no histórico por GraphQL.
+
+Toda espera é condicional, com prazo absoluto.
+
+| Código | Situação |
+|---|---|
+| 0 | sucesso |
+| 1 | verificação divergente |
+| 2 | pré-requisito ausente |
+| 3 | prazo esgotado |
+| 4 | processo do roteiro encerrado |
+| 5 | limpeza incompleta |
+| 130 / 143 | interrupção por SIGINT / SIGTERM |
+
+**Recursos criados e removidos.** Cada execução tem um `RUN_ID` e cria:
+- o diretório de runtime `${TMPDIR:-/tmp}/hospital-smoke.XXXXXXXX`;
+- a rede, os dois containers e os dois volumes `hospital-smoke-<RUN_ID>…`, todos com o label
+  `br.com.fiap.hospital.smoke=<RUN_ID>`;
+- os três processos dos serviços.
+
+Tudo é removido ao final — em sucesso, falha ou interrupção:
+- processos só depois de confirmados como da execução, nunca por nome;
+- containers e rede por nome exato, depois de conferido o valor completo do label.
+
+Qualquer resíduo termina com código 5. `hospital-postgres`, `hospital-rabbitmq`, seus volumes e
+qualquer outro recurso não são tocados.
+
+**Diagnóstico.** Em falha, ou com `SMOKE_MANTER_LOGS=1`, os logs dos serviços e dos containers,
+a última resposta e a etapa vão para `${TMPDIR:-/tmp}/hospital-smoke-diagnostico-<RUN_ID>/`, com
+token, segredo e senhas mascarados. O caminho é impresso. O pacote não é recurso de runtime e
+fica para você apagar.
+
+Execuções **consecutivas** são independentes. Execuções **simultâneas no mesmo checkout não são
+suportadas**: o build único escreve nos mesmos `target/`.
+
 ## Executar a infraestrutura
 
 Sobe PostgreSQL 16 e RabbitMQ 3.13, que é tudo que os serviços precisam para rodar localmente.

@@ -69,8 +69,9 @@ hospital-scheduling-fase3/
 ├── README.md
 ├── docker/
 │   └── postgres/init.sql            # cria os três databases
+├── .gitattributes                   # *.sh com fim de linha LF
 ├── scripts/
-│   ├── smoke-test.sh                # e2e com o compose no ar
+│   ├── smoke-test.sh                # smoke ponta a ponta sem Compose: infraestrutura efêmera por RUN_ID (M10)
 │   └── auditoria.sh                 # confere cada RF/RNF contra sua evidência
 ├── docs/
 │   ├── 00-project-charter.md
@@ -117,7 +118,27 @@ hospital-scheduling-fase3/
         ├── infrastructure/leitura/     # ConsultasDoHistorico: predicados do filtro no armazenamento
         ├── infrastructure/correcao/    # CorrecaoDeRegistroHistorico: correção atômica com auditoria
         └── infrastructure/graphql/     # resolvers, schema.graphqls, escalar DateTime e os dois caminhos de erro
+└── quality-gates/                   # módulo técnico (M10), sem aplicação e sem Spring, construído por último
+    └── src/main/java/br/com/fiap/hospital/qualidade/
+                                     # relatório agregado JaCoCo, auditoria de execução, gate de cobertura
 ```
+
+O reactor tem **sete projetos Maven**:
+- a raiz;
+- os cinco módulos de código;
+- o `quality-gates`, sexto módulo filho, com os cinco módulos de código como dependências
+  internas em escopo `compile`.
+
+Na fase `verify`, o `quality-gates` roda o relatório agregado, a auditoria de execução e o gate
+de cobertura, nessa ordem. Os testes dele verificam a topologia do reactor, a exclusão de
+cobertura, a infraestrutura real dos ITs e o roteiro de smoke.
+
+O `scripts/smoke-test.sh` **não usa Compose** nem imagens das aplicações:
+- sobe PostgreSQL 16 e RabbitMQ 3.13 efêmeros, identificados pelo `RUN_ID`;
+- executa os três serviços como processos `java -jar` dos `*-exec.jar`;
+- remove, ao final, somente o que criou.
+
+O Compose local e os containers `hospital-postgres` e `hospital-rabbitmq` ficam intactos.
 
 ## 4. agendamento-service — Clean Architecture
 
@@ -362,7 +383,7 @@ Cadeia de filtros: `SecurityFilterChain` stateless, CSRF desabilitado (API), `/a
 }
 ```
 
-Mapa de exceções: `AgendamentoNoPassado` → 422, `AgendamentoForaDoHorizonte` → 422, `DateTimeException` → 400, `ConflitoDeAgenda` → 409, `RecursoNaoEncontrado` → 404, `TransicaoDeStatusInvalida` → 409, `MotivoDeCancelamentoObrigatorio` → 422, `AlteracaoConcorrente` → 409, `CredencialInvalida` → 401, `AcessoNegado` → 403, `IllegalArgumentException` → 400, `MethodArgumentNotValid` → 400, `AccessDenied` (Spring Security) → 403, `AuthenticationException` → 401.
+Mapa de exceções: `AgendamentoNoPassado` → 422, `AgendamentoForaDoHorizonte` → 422 (início **e** fim do período, que não pode ultrapassar o horizonte), `DateTimeException` → 400, `ConflitoDeAgenda` → 409, `RecursoNaoEncontrado` → 404, `TransicaoDeStatusInvalida` → 409, `MotivoDeCancelamentoObrigatorio` → 422, `TextoComCaractereInvalido` → 422, `AlteracaoConcorrente` → 409, `CredencialInvalida` → 401, `AcessoNegado` → 403, `IllegalArgumentException` → 400 (inclui limite de intervalo fora da faixa temporal suportada), `MethodArgumentNotValid` → 400, `HttpMessageConversionException` na leitura do corpo → 400, `AccessDenied` (Spring Security) → 403, `AuthenticationException` → 401.
 
 As recusas de segurança têm `type` próprio e distinto entre si:
 
@@ -414,7 +435,10 @@ Estas convenções são injetadas em toda requisição de planejamento pelo `con
 |---|---|
 | `*Test.java` no surefire, `*IT.java` no failsafe | `mvn test` fica rápido no ciclo curto; `mvn verify` roda tudo antes do PR |
 | Infraestrutura real via Testcontainers | Mockar broker e banco esconde exatamente os erros que importam aqui: transação, idempotência, DLQ, índice |
-| Cobertura ≥ 85% global, ≥ 90% em `domain` e `application` | Gate no build, não meta aspiracional |
+| Cobertura ≥ 85% global, ≥ 90% em `domain` e `application` | Gate no build, não meta aspiracional. A partir do M10 é regra efetiva: o `quality-gates` mede linhas no relatório agregado dos cinco módulos e reprova `mvn -q clean verify` abaixo do piso |
+| Gate global sem filtro de teste | A auditoria de execução recusa seleção, exclusão, omissão e tolerância — por parâmetro, pelos POMs ou no código de teste —, e o gate só aceita evidência da sessão corrente. A garantia é por suíte e família de relatórios, não por método |
+| Infraestrutura real verificada | O `InfraestruturaRealTest` recusa dublê de banco ou broker, banco em memória e imagem fora da versão adotada, e cada módulo prova em runtime, num `InfraestruturaReal*IT`, só a infraestrutura que usa |
+| Exemplar do contrato em cópia única | `evento-consulta.json` vive só no `shared-contracts` e chega aos serviços por test-jar; produtor e consumidores o exercitam pelo broker real |
 | Um teste de integração por célula da matriz de autorização | É o item de segurança que a banca consegue verificar objetivamente |
 
 ### Cortes conscientes

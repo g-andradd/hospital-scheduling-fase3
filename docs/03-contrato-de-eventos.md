@@ -164,3 +164,4 @@ spring:
 | Consumidor recebe o mesmo `eventId` duas vezes e produz um único efeito | M06, M08 |
 | Payload malformado ou erro repetido leva a mensagem para a DLQ após 3 tentativas | M05 |
 | `correlationId` do request HTTP aparece no log do notificacao-service | M11 |
+| Fixture canônica exercitada por produtor e consumidores | M10 |
