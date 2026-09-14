@@ -73,7 +73,14 @@ class EscalarDateTime {
                 private OffsetDateTime converter(
                         String texto, java.util.function.Function<String, RuntimeException> erro) {
                     try {
-                        return OffsetDateTime.parse(texto);
+                        OffsetDateTime instante = OffsetDateTime.parse(texto);
+                        // A faixa e verificada aqui, na coercao, e nao no resolver: e o
+                        // ponto por onde passam o filtro e a data corrigida, e recusar
+                        // depois ja seria com o valor a caminho do SQL.
+                        if (!FaixaTemporalSuportada.suporta(instante)) {
+                            throw erro.apply(FaixaTemporalSuportada.mensagemDeRecusa());
+                        }
+                        return instante;
                     } catch (DateTimeParseException e) {
                         throw erro.apply("DateTime invalido: esperado ISO-8601 com deslocamento.");
                     }
