@@ -389,13 +389,13 @@ Os negativos automatizados da parte A estão nas tasks 2.1, 4.3, 4.4, 4.9, 4.12,
 
 ## 12. Clone limpo com repositório Maven isolado (D14)
 
-- [ ] 12.1 O Gabriel, ou o implementador com autorização explícita dele para clonagem somente leitura, clona a feature branch num diretório temporário e executa, com `-Dmaven.repo.local=<repo-temporario-vazio>` e **sem `install`**, nesta ordem: `mvn -q test`, `mvn -q package` e `mvn -q clean verify`. Registrar:
+- [x] 12.1 O Gabriel, ou o implementador com autorização explícita dele para clonagem somente leitura, clona a feature branch num diretório temporário e executa, com `-Dmaven.repo.local=<repo-temporario-vazio>` e **sem `install`**, nesta ordem: `mvn -q test`, `mvn -q package` e `mvn -q clean verify`. Registrar:
   - a origem da G2 em `test` (diretório de testes) e em `package`/`verify` (jar anexado);
   - a execução verde;
   - a ausência de `<repo-temporario>/br/com/fiap/hospital`.
 
   Cobre "Build completo a partir de um clone limpo".
-- [ ] 12.2 No mesmo clone, executar `MAVEN_ARGS=-Dmaven.repo.local=<repo-temporario> scripts/smoke-test.sh` e registrar código 0 e zero órfãos.
+- [x] 12.2 No mesmo clone, executar `MAVEN_ARGS=-Dmaven.repo.local=<repo-temporario> scripts/smoke-test.sh` e registrar código 0 e zero órfãos.
 
 ## 13. Documentação pertinente (D16)
 
