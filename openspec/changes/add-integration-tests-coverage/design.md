@@ -130,7 +130,7 @@ abstrata e termina em `Test`. As bases `*ITBase` e `M05*Base` são abstratas e s
 <dependency>
   <groupId>br.com.fiap.hospital</groupId>
   <artifactId>shared-contracts</artifactId>
-  <version>${revision}</version>
+  <version>${project.version}</version>
   <type>test-jar</type>
   <classifier>tests</classifier>
   <scope>test</scope>
@@ -209,6 +209,25 @@ de `alteracoes`.
 - **Externas:** bibliotecas necessárias aos testes do próprio módulo, como JUnit e AssertJ, são
   permitidas **somente em escopo `test`** e não entram na contagem. O código principal usa só o
   JDK, então biblioteca externa fora de `test` é recusada.
+- **Versão das dependências internas e POM publicado.**
+  - Os POMs-fonte continuam centralizados: `${revision}` fica restrito à versão do projeto raiz e
+    à versão do `<parent>` de cada um dos seis módulos — sete ocorrências —, e toda dependência
+    entre módulos do reactor usa `${project.version}`.
+  - O `flatten-maven-plugin` 1.6.0, em `resolveCiFriendliesOnly`, resolve os placeholders
+    CI-friendly só na versão do projeto e do parent: sozinho, deixava `${revision}`, e depois
+    `${project.version}`, literais nas `<dependency>` dos `.flattened-pom.xml`.
+  - Por isso a configuração central do plugin, no POM raiz, declara
+    `<pomElements><dependencies>resolve</dependencies></pomElements>`. É essa resolução que
+    materializa as versões no POM publicado: as dependências internas saem com a versão do
+    reactor.
+  - Versões e escopos externos explicitados no `.flattened-pom.xml` — por exemplo, versões vindas
+    do BOM e `<scope>compile</scope>` — são resultado esperado da resolução: é o POM resolvido para
+    consumidores. Os POMs-fonte **não** recebem versões externas duplicadas.
+  - A versão do plugin não muda.
+  - A prova estrutural (`VersaoCentralizadaTest`) exige, no POM-fonte, exatamente uma ocorrência
+    de `${revision}` na raiz e uma no parent de cada módulo, nenhuma em `<dependency>`, dependência
+    interna com `${project.version}`, e, no plugin central, `flattenMode=resolveCiFriendliesOnly` e
+    `pomElements/dependencies=resolve`.
 - O `AgregacaoDoReactorTest` distingue internas de externas:
   - exige as cinco internas em `compile`;
   - recusa `test`, `runtime` e `provided` apenas nelas;
@@ -309,6 +328,30 @@ piso passa.
 - bundle, LINE, total ou pacotes ausentes;
 - soma divergente do total.
 
+**Validação de todos os packages (opção A+).** O JaCoCo não escreve contador cujo total é zero:
+um pacote só de interfaces sai com `<class>` e `<sourcefile>` e nenhum `<counter>`. O relatório
+real da primeira execução completa tinha três pacotes assim (`agendamento/domain/port`,
+`notificacao/repository` e `historico/infrastructure/persistence/repository`). A regra:
+
+- `<group>` e `<report>` têm **exatamente um** `<counter type="LINE">` direto e válido;
+- **todo** `<package>` dos cinco groups é validado antes de qualquer escopo — não só os de
+  `domain` e `application` — e produz uma única contagem validada:
+  - com um LINE direto válido, contribui com ele;
+  - **pacote sem linhas executáveis:** contribui 0/0 **somente** se tem ao menos um `<class>` e ao
+    menos um `<sourcefile>` e não tem, em toda a subárvore, nenhum `<counter>`, `<method>` ou
+    `<line>`;
+  - qualquer outro contador ou evidência executável sem LINE direto reprova;
+  - package vazio (sem `<class>` ou sem `<sourcefile>`), LINE duplicado ou ilegível reprova;
+- a mesma contagem validada alimenta a reconciliação e os escopos, sem caminho paralelo:
+  - soma dos packages de cada group, incluindo os 0/0, **igual** ao LINE direto do group;
+  - soma dos groups **igual** ao LINE do report;
+  - `domain` e `application` somados dessas contagens, com pacotes existentes e total positivo.
+
+**Garantia observável.** Ausência acidental de LINE, relatório sem informação de linha sobre
+código executável e inconsistência entre package, group e report são recusados. Não se afirma que
+qualquer adulteração deliberada do relatório seja distinguível: um relatório reescrito com
+contadores coerentes entre si não é detectável por este gate.
+
 **Parser seguro e offline.** DTD externa desligada, sem entidades externas.
 
 **Testes automatizados:**
@@ -316,6 +359,11 @@ piso passa.
 - acima do piso; no piso; global abaixo; `domain` abaixo; `application` abaixo;
 - média contra soma, nos dois sentidos;
 - pacote, bundle ou LINE ausente; total zero;
+- pacote só de interfaces no formato real do JaCoCo, aceito como 0/0, e os três pacotes 0/0 do
+  relatório real reproduzidos;
+- INSTRUCTION presente e LINE ausente; `<method>`, `<line>` ou counter descendente com LINE
+  direto ausente; pacote fora de `domain`/`application` sem LINE; package vazio; soma dos
+  packages divergente do LINE do group — todos reprovados;
 - `<report/>`; XML inválido; arquivo ausente; soma divergente;
 - DTD externa;
 - marcador ausente ou de outra sessão;
@@ -404,10 +452,38 @@ capaz de selecionar, excluir, pular ou tolerar casos. Qualquer uma definida repr
 | Ampliação por dependência | `dependenciesToScan` — a mesma user property no Surefire e no Failsafe 3.2.5 |
 | Omissão | `skipTests`, `skipITs`, `maven.test.skip`, `maven.test.skip.exec`, `surefire.skipAfterFailureCount`, `failsafe.skipAfterFailureCount` |
 | Tolerância | `maven.test.failure.ignore`, `surefire.rerunFailingTestsCount`, `failsafe.rerunFailingTestsCount` |
+| Tolerância à seleção vazia | `surefire.failIfNoSpecifiedTests`, `failsafe.failIfNoSpecifiedTests`, `it.failIfNoSpecifiedTests` |
 
-A task 6.1 confere esta lista contra a documentação dos goals `surefire:test`,
-`failsafe:integration-test` e `failsafe:verify` da versão fixada. Toda outra propriedade ali
-capaz de selecionar ou excluir casos entra na lista antes de o gate ser considerado pronto.
+**Conferência contra a versão fixada (task 6.1).** Fontes: os descritores oficiais
+`META-INF/maven/plugin.xml` de `maven-surefire-plugin-3.2.5.jar` (goal `test`) e de
+`maven-failsafe-plugin-3.2.5.jar` (goals `integration-test` e `verify`), que geram as páginas
+`surefire:test`, `failsafe:integration-test` e `failsafe:verify` da documentação Apache Maven. Todo
+parâmetro com user property dos três goals foi examinado:
+
+- **Incluídos:** toda propriedade da tabela acima está nos descritores com exatamente esse nome. A
+  única lacuna era `failIfNoSpecifiedTests` (`surefire.`, `failsafe.` e o legado `it.`), que tolera
+  uma seleção que não casou com nenhuma classe — tolerância associada à seleção.
+- **Examinados e não incluídos, por não selecionarem, omitirem ou tolerarem casos:**
+  - `failIfNoTests` e `*.failOnFlakeCount` só tornam o build mais estrito;
+  - `disableXmlReport` e `surefire.reportNameSuffix` mudam só a evidência, e a ausência ou o nome
+    inesperado dos relatórios já reprova por família ausente e relatório órfão;
+  - `runOrder`, `parallel*`, `threadCount*`, `forkCount`, `reuseForks`, `forkNode` e
+    `*.timeout`/`*.exitTimeout` mudam só ordem, paralelismo e processo; um timeout é falha;
+  - `argLine`, `jvm`, `enableAssertions`, `childDelegation`, `useSystemClassLoader`,
+    `useManifestOnlyJar`, `useModulePath`, `maven.test.additionalClasspath*`,
+    `maven.test.dependency.excludes`, `junitArtifactName`, `testNGArtifactName`, `objectFactory`,
+    `tempDir`, `encoding`, `printSummary`, `reportFormat`, `useFile`, `trimStackTrace`,
+    `redirectTestOutputToFile`, `excludedEnvironmentVariables`,
+    `enableProcessChecker`, `shutdown` e `debugForkedProcess` configuram ambiente, classpath e
+    saída. Uma troca de provedor que não execute as classes reprova por família ausente;
+  - `argLine` e `systemPropertiesFile` não selecionam por si, mas são canais de parâmetros do
+    JUnit Platform e são inspecionados como tal (abaixo).
+- **Parâmetros só de configuração** (sem user property), também examinados: `testClassesDirectory`
+  muda o diretório varrido — seleção — e `summaryFile` do `failsafe:verify` troca o resumo lido —
+  tolerância —; os dois entram na inspeção dos POMs. `reportsDirectory` só move a evidência, o que
+  já reprova por módulo sem relatórios; `summaryFiles` só acrescenta resumos; `properties`,
+  `systemPropertyVariables` e `systemProperties` são canais de parâmetros do JUnit Platform
+  (abaixo).
 
 **Por configuração efetiva dos POMs**
 
@@ -420,17 +496,171 @@ exige:
 - nenhum `<test>`, `<includesFile>`, `<excludesFile>`, `<groups>`, `<excludedGroups>`,
   `<includeJUnit5Engines>`, `<excludeJUnit5Engines>`, `<suiteXmlFiles>`, `<dependenciesToScan>`,
   `<skip>`, `<skipTests>`, `<skipITs>`, `<skipExec>`, `<skipAfterFailureCount>`,
-  `<rerunFailingTestsCount>` ou `<testFailureIgnore>` na configuração dos dois plugins, em
-  qualquer projeto ou perfil;
+  `<rerunFailingTestsCount>`, `<testFailureIgnore>`, `<failIfNoSpecifiedTests>`,
+  `<testClassesDirectory>` ou `<summaryFile>` na configuração dos dois plugins, no nível do plugin
+  ou de execução, em `pluginManagement` ou `build/plugins`, em qualquer projeto ou perfil;
+- os `<includes>` normativos declarados uma única vez, no POM raiz; nenhum módulo, perfil ou
+  execução os redefine;
 - nenhuma propriedade da tabela acima em `<properties>` de projeto ou perfil;
-- nenhum `junit-platform.properties` nas fontes de teste, nem `configurationParameters`, com
-  parâmetro que filtre descoberta ou execução.
+- nenhuma das chaves internas lidas pelo provider JUnit Platform do Surefire 3.2.5 dentro do
+  elemento `<properties>` da configuração do Surefire ou do Failsafe — `groups`, `excludegroups`,
+  `includejunit5engines` e `excludejunit5engines` —, no plugin da raiz, em módulos, perfis,
+  `pluginManagement` e execuções (abaixo);
+- nenhum parâmetro do JUnit Platform que omita a execução ou tolere falha, em nenhum canal
+  (abaixo).
+
+**Parâmetros do JUnit Platform.** Conferidos nas versões efetivas do build — JUnit Jupiter 5.12.2 e
+JUnit Platform 1.12.2. A recusa é por chave oficial e pelo valor que muda a semântica, nunca por
+palavra contida no nome. Fontes, separadas pela natureza da evidência:
+
+- **Documentação oficial:** o *User Guide* na tag `r5.12.2` do repositório `junit-team/junit5` —
+  `user-guide/running-tests.adoc` (fontes e precedência dos parâmetros de configuração;
+  `configurationParameters` e filtros por nome, `groups` e `excludedGroups` no Surefire) e
+  `user-guide/advanced-topics/launcher-api.adoc` (modo dry-run; listener de descoberta padrão que
+  aborta na primeira falha; `junit.platform.execution.listeners.deactivate` só alcança listeners
+  registrados por `ServiceLoader`).
+- **Bytecode dos jars efetivos:** as chaves existentes, pelas constantes de
+  `org.junit.jupiter.engine.Constants` e `org.junit.platform.launcher.LauncherConstants`; o dry-run,
+  que em `EngineExecutionOrchestrator` notifica cada teste com `executionSkipped`; os valores aceitos
+  do listener de descoberta, `logging` e `abortOnFailure`, no enum de `LauncherDiscoveryListeners`, e
+  o padrão `abortOnFailure`, em `LauncherDiscoveryRequestBuilder`.
+
+- **Filtram descoberta ou execução — recusados:**
+  - `junit.platform.execution.dryRun.enabled` com valor verdadeiro: pelo guia, o Launcher pula a
+    execução real e notifica os testes como se tivessem sido ignorados;
+  - `junit.platform.discovery.listener.default` com valor diferente de `abortOnFailure`: pelo guia, o
+    listener padrão aborta a descoberta na primeira falha; `logging`, o outro valor aceito pelo
+    bytecode, só registra a falha e deixa a execução seguir sem as classes afetadas.
+- **Examinados e legítimos — aceitos:** `junit.jupiter.execution.parallel.*` e
+  `junit.jupiter.execution.timeout.*` (paralelismo e tempo; timeout é falha),
+  `junit.jupiter.testinstance.lifecycle.default`, `junit.jupiter.testmethod.order.default`,
+  `junit.jupiter.testclass.order.default`, `junit.jupiter.displayname.generator.default`,
+  `junit.jupiter.tempdir.*`, `junit.jupiter.params.*`, `junit.platform.output.capture.*`,
+  `junit.platform.stacktrace.pruning.enabled`, `junit.platform.reporting.output.dir`,
+  `junit.platform.launcher.interceptors.enabled`, `junit.jupiter.extensions.*`,
+  `junit.platform.execution.listeners.deactivate` — que só desativa listeners registrados por
+  `ServiceLoader`, e não o do Surefire — e `junit.jupiter.conditions.deactivate`, que desativa
+  condições e faz executar mais, nunca menos.
+- **Seleção por tags, motores, nome ou pacote** não existe como parâmetro de configuração nesses
+  canais: é feita por filtros da requisição do Launcher, que o Surefire e o Failsafe montam a partir
+  de `groups`, `excludedGroups`, `includeJUnit5Engines`, `excludeJUnit5Engines`, includes e
+  excludes — já cobertos pela tabela e pela configuração efetiva.
+- **Chaves internas do provider, confirmadas por bytecode** (`maven-surefire-common` e
+  `surefire-junit-platform` 3.2.5): `AbstractSurefireMojo.convertGroupParameters` e
+  `convertJunitEngineParameters` gravam os elementos `<groups>`, `<excludedGroups>`,
+  `<includeJUnit5Engines>` e `<excludeJUnit5Engines>` no mesmo `Properties` do elemento
+  `<properties>` do plugin, sob as chaves `groups`, `excludegroups`, `includejunit5engines` e
+  `excludejunit5engines`; o `JUnitPlatformProvider` lê exatamente essas quatro chaves desse mapa para
+  montar os filtros de tag e de motor. Por isso, declará-las diretamente em
+  `<configuration><properties>` seleciona testes sem passar pelos elementos de primeiro nível. As
+  quatro são recusadas pelo nome exato, em `<properties>` do Surefire e do Failsafe, no plugin da
+  raiz, em módulos, perfis, `pluginManagement` e execuções. Nenhuma outra chave desse mapa é recusada:
+  `configurationParameters` é conferido pelos parâmetros do JUnit Platform, e as demais não selecionam.
+- **Duas representações de um parâmetro `Properties`, confirmadas por bytecode** (`PropertiesConverter`
+  do `org.eclipse.sisu.plexus` 0.3.5 embarcado no Maven 3.9.3): um filho `<property>` vale pelos seus
+  `<name>` e `<value>`; qualquer outro filho vale pelo próprio nome, com o texto como valor. Assim,
+  `<groups>x</groups>` e `<property><name>groups</name><value>x</value></property>` produzem a mesma
+  entrada. A inspeção lê as duas formas, por igualdade exata de chave, em `<properties>` —
+  `groups`, `excludegroups`, `includejunit5engines`, `excludejunit5engines` e `configurationParameters`
+  — e em `<systemProperties>`.
+- **Configuração escrita contra configuração recebida: interpolação Maven e precedência da linha de
+  comando.** O Maven interpola `${...}` antes de entregar a configuração ao Surefire e ao Failsafe, e os
+  dois ainda resolvem `@{...}` no `argLine`, na execução. Na interpolação, uma user property da linha de
+  comando prevalece sobre a propriedade de perfil, módulo ou raiz: com `<m10.dry-run>false</m10.dry-run>`
+  e `junit.platform.execution.dryRun.enabled=${m10.dry-run}` no `configurationParameters`,
+  `mvn verify -Dm10.dry-run=true` entrega `true` ao JUnit. A auditoria não recebe propriedades
+  arbitrárias da execução, então nem o texto cru nem o valor do POM provam o valor recebido. Estratégia
+  **A**:
+  - **alias customizado é recusado** — mesmo quando o valor atual do POM parece seguro — em toda posição
+    capaz de ocultar configuração de teste: qualquer ponto do `configurationParameters`; o nome de uma
+    propriedade em `<properties>` do plugin, em `<systemProperties>` ou de uma `systemPropertyVariable`;
+    o valor de um parâmetro relevante do JUnit Platform; o `argLine`, do plugin ou de `<properties>` do
+    projeto; e o caminho de um `systemPropertiesFile`. Alias é toda expressão `${nome}` ou `@{nome}` fora
+    das exceções abaixo; a mensagem mostra o valor que o POM lhe dá, quando há;
+  - **exceção 1, `@{argLine}` e `${argLine}` no `argLine`:** o valor efetivo de `argLine` — já com a
+    precedência da linha de comando — é repassado à auditoria pelo `exec` e analisado; por isso
+    `-DargLine=-Djunit.platform.execution.dryRun.enabled=true` reprova;
+  - **exceção 2, expressões próprias do modelo e não sobrescrevíveis**, nos canais de `argLine` e de
+    caminho: `${project.basedir}`, `${basedir}` e `${project.build.directory}`. O interpolador de modelo
+    as resolve pelo próprio projeto antes das user properties — conferido com `help:evaluate` sob
+    `-Dproject.build.directory=HOSTIL` e `-Dproject.basedir=HOSTIL`, que mantiveram os valores reais,
+    enquanto `-Dm10.dry-run=true` mudou um alias `false`. A auditoria as substitui pelos valores reais do
+    módulo e analisa os `-D` do texto resultante, de modo que um diretório cujo caminho contenha
+    ` -Djunit.platform.execution.dryRun.enabled=true` reprova. `${project.build.directory}` só vale
+    enquanto nenhum POM redefinir `<build><directory>`;
+  - **agente do Mockito por caminho determinístico:** `${org.mockito:mockito-core:jar}`, definida pelo goal
+    `dependency:properties`, também é uma propriedade Maven sobrescrevível por `-D`, e poderia trazer
+    `caminho -Djunit.platform.execution.dryRun.enabled=true`. O POM raiz deixa de usá-la: o goal
+    `dependency:copy-dependencies` copia o `mockito-core` para `${project.build.directory}/agentes`, sem
+    versão no nome, e o `argLine` normativo passa a `@{argLine} -javaagent:${project.build.directory}/agentes/mockito-core.jar`.
+    O Mockito continua como java agent composto com o JaCoCo, como o roadmap exige, e a coordenada, se
+    voltar ao `argLine`, é recusada como alias;
+  - **fora dessas posições, `${...}` não reprova só por existir** — uma propriedade comum ou o valor de
+    uma propriedade de sistema que não é parâmetro relevante;
+  - as propriedades de `<properties>` visíveis no escopo — raiz, módulo e perfil — ainda são resolvidas,
+    só para o diagnóstico e para acusar também um valor inseguro já presente no POM; nunca para aceitar um
+    alias.
+- **Canais**, na ordem de precedência do guia, todos inspecionados:
+  1. requisição do Launcher: `<properties><configurationParameters>` do Surefire e do Failsafe, em
+     qualquer POM, perfil, `pluginManagement` ou execução;
+  2. propriedades de sistema da JVM de teste: `<systemPropertyVariables>`, `<systemProperties>`,
+     `-D` em `<argLine>`, o arquivo de `<systemPropertiesFile>`, e, pela linha de comando, as duas
+     chaves, `argLine`, `surefire.systemPropertiesFile` e `failsafe.systemPropertiesFile`, repassados
+     à auditoria como as demais propriedades;
+  3. `junit-platform.properties` na raiz do classpath de teste: `src/test/resources` e
+     `src/main/resources` de cada módulo.
+- Um `systemPropertiesFile` declarado que não possa ser lido — inexistente, diretório, caminho
+  inválido ou conteúdo que não é um arquivo de propriedades válido — reprova com diagnóstico: o
+  canal não pode ser conferido. O mesmo vale para `configurationParameters` e
+  `junit-platform.properties` ilegíveis. Nenhum desses casos interrompe a auditoria com exceção.
+- **Limite residual declarado:** um `junit-platform.properties` dentro de um jar de dependência e
+  extensões autodetectadas não são inspecionados. Uma condição autodetectada que desabilite testes
+  aparece como caso pulado e reprova; um tratador de exceção que engula falhas não é detectável.
 
 A recusa de suíte sem família complementa essa verificação: ela pega qualquer seleção não
 enumerada que tenha efeito sobre classes inteiras.
 
-**Desabilitação.** A varredura sintática reprova `@Disabled`, `@Ignore`, `Assumptions`,
-`assume*`, `assumingThat`, `@EnabledIf*`, `@DisabledIf*`, `@EnabledOn*` e `@DisabledOn*`.
+**Desabilitação.** Anotações e herança são resolvidas pela árvore sintática e pelos imports —
+escopos, mesmo arquivo, declaração simples, mesmo pacote, imports sob demanda e `java.lang` —, nunca
+por expressão regular nem por semelhança de nome. **Depois** da resolução, a varredura reprova só:
+
+- `org.junit.jupiter.api.Disabled` e `org.junit.Ignore`;
+- as anotações condicionais do pacote `org.junit.jupiter.api.condition` do JUnit 5.12.2 —
+  `EnabledOnOs`, `DisabledOnOs`, `EnabledOnJre`, `DisabledOnJre`, `EnabledForJreRange`,
+  `DisabledForJreRange`, `EnabledInNativeImage`, `DisabledInNativeImage`, `EnabledIf`, `DisabledIf`,
+  `EnabledIfSystemProperty`, `DisabledIfSystemProperty`, `EnabledIfSystemProperties`,
+  `DisabledIfSystemProperties`, `EnabledIfEnvironmentVariable`, `DisabledIfEnvironmentVariable`,
+  `EnabledIfEnvironmentVariables` e `DisabledIfEnvironmentVariables`;
+- `org.springframework.test.context.junit.jupiter.EnabledIf` e `DisabledIf`;
+- `org.testcontainers.junit.jupiter.Testcontainers` com `disabledWithoutDocker = true`;
+- anotação declarada nas fontes de teste que seja meta-anotada, transitivamente, com uma das
+  anteriores.
+
+Uma anotação própria de nome parecido — `@EnabledIfAuditoria`, por exemplo — sem meta-anotação
+condicional é aceita: nome semelhante não prova semântica. Um nome dessa lista que não possa ser
+resolvido reprova identificando o arquivo e o símbolo.
+
+**Suposição condicional.** A varredura reprova só chamadas resolvidas às APIs de suposição do
+classpath de teste:
+
+- `org.junit.jupiter.api.Assumptions` (`assumeTrue`, `assumeFalse`, `assumingThat`, `abort`);
+- `org.junit.Assume` (`assumeTrue`, `assumeFalse`, `assumeNotNull`, `assumeThat`,
+  `assumeNoException`);
+- `org.assertj.core.api.Assumptions` e `org.assertj.core.api.BDDAssumptions` do AssertJ 3.27.6, com
+  seus métodos estáticos públicos de suposição (`assumeThat*` e `given*`). Fica de fora
+  `setPreferredAssumptionException`, que só configura qual exceção o AssertJ lançará numa suposição
+  posterior: chamá-lo não aborta, não pula nem condiciona o teste.
+
+Resolve-se a chamada qualificada pelo tipo — nome simples importado, import sob demanda ou nome
+qualificado —, a referência de método pelo mesmo critério, e a chamada não qualificada por import
+estático simples ou sob demanda da API, salvo se um método de mesmo nome declarado na própria
+classe, nas envolventes ou nos supertipos das fontes de teste a sombrear. Um método local como
+`assumeFormatoValido()` é aceito.
+
+**Classe aninhada com testes sem `@Nested`.** Uma classe aninhada que declara métodos de teste sem
+ser `@Nested` nunca é executada: os includes excluem classes internas e o JUnit só descobre as
+aninhadas marcadas. Ela reprova como teste que nunca rodaria, do mesmo modo que a suíte fora da
+convenção.
 
 **Sessão.** O marcador de D4 precisa ser igual ao identificador recebido. Nada usa data de
 modificação.
@@ -466,7 +696,27 @@ Casos cobertos:
   `rerunFailingTestsCount`;
 - **configuração efetiva, uma por vez:** include alterado, `<excludes>` acrescentado,
   `<dependenciesToScan>` acrescentado, propriedade de filtro em `<properties>` de módulo, filtro
-  só num perfil e `junit-platform.properties` com filtro;
+  só num perfil, cada chave interna do provider (`groups`, `excludegroups`, `includejunit5engines`,
+  `excludejunit5engines`) em `<properties>` do plugin, uma por vez e nas localizações da raiz, perfil,
+  `pluginManagement` e execução, e cada parâmetro oficial do JUnit Platform que omite ou tolera, em
+  cada canal, inclusive `systemPropertiesFile` inexistente, diretório e com conteúdo inválido; cada
+  chave interna do provider e o `configurationParameters` nas duas representações de `Properties`;
+  e, por alias, o alias com valor `false` no POM em `configurationParameters` — a simulação da user
+  property que o sobrescreve —, o conteúdo inteiro por alias, aliases em `systemPropertyVariables` e
+  `systemProperties`, `${m10.test.args}` e `@{m10.test.args}` no `argLine`, o listener de descoberta
+  escondido por alias, a coordenada do Mockito sobrescrevível e um caminho de projeto que introduza `-D`
+  pelo `${project.build.directory}`; com os positivos de `dryRun=false` literal, `configurationParameters`
+  literais legítimos, o `argLine` normativo com o agente em `${project.build.directory}/agentes`, o
+  `@{argLine}` com valor efetivo seguro e propriedade comum fora dos canais de teste;
+- **ausência de falso positivo:** configuração legítima do JUnit Platform aceita em todos os canais
+  (`junit.jupiter.execution.parallel.enabled=true`,
+  `junit.jupiter.execution.parallel.mode.default=concurrent`,
+  `junit.jupiter.testinstance.lifecycle.default=per_class`,
+  `junit.jupiter.extensions.autodetection.enabled=true`,
+  `junit.platform.execution.listeners.deactivate=algum.Listener`); anotação própria de nome
+  `@EnabledIf...` sem meta-anotação condicional aceita; método local `assumeFormatoValido()`
+  aceito; `Assumptions.setPreferredAssumptionException(...)` do AssertJ aceito; e, para as condições e suposições reais, import simples, sob demanda, estático e chamada
+  ou anotação qualificada, inclusive por meta-anotação local;
 - **omissão mascarada pela soma:** uma classe com um método parametrizado gerando cinco casos e
   outro método omitido, todos os relatórios presentes e total positivo. Com a omissão por
   `-Dtest=Classe#metodoParametrizado`, a auditoria reprova pelo filtro; com a mesma omissão por
@@ -574,7 +824,7 @@ Tipo sem mapeamento reprova.
 | ENUM | inexistente; vazio; caixa divergente; ordinal. No corpo, nulo e tipo incompatível. |
 | DATA | as 12 bordas de `DATAS_HOSTIS`; sem offset; formato local; no corpo, timestamp numérico e nulo. |
 | INTEIRO | zero; negativo; `MAX`; `MAX+1`; muito grande; fração; texto; vazio. No corpo, nulo e tipo incompatível. |
-| TEXTO | vazio; espaços; acima do limite; NUL e controle; unicode de 4 bytes; SQL; HTML. No corpo, nulo e tipo incompatível. |
+| TEXTO | vazio; espaços; acima do limite; NUL e controle, nas bordas **e no meio** do texto; unicode de 4 bytes; SQL; HTML. No corpo, nulo e tipo incompatível. |
 | CORPO | JSON malformado; ausente; `null`; array; escalar; todos os campos com tipo incompatível; `Content-Type` `text/plain` e `application/xml`; campo desconhecido; chave duplicada; conteúdo após o JSON. |
 
 Todos os valores atuais do `EntradasHostisIT` estão contidos no catálogo.
@@ -600,6 +850,12 @@ falhe, e um E vazio — por exemplo, se as passagens não rodaram — reprova.
 
 **Asserções por ataque:** nenhum 5xx; nenhum vazamento; Problem Detail na recusa da aplicação;
 recusa do conector só nas variantes marcadas.
+
+**Isolamento entre combinações.** Depois de verificar a resposta, a varredura descarta as consultas
+que a combinação criou. Um valor hostil **aceito** muda a agenda e pode impedir as combinações
+seguintes — uma duração no teto do inteiro ocupa a agenda do médico por milênios —, e sem o
+descarte a varredura pararia por efeito do ataque anterior, não por defeito do endpoint sob ataque.
+O descarte é sempre posterior às asserções (D17).
 
 **Preservado:** `credenciaisHostis` (19 casos), `aVarreduraAlcancaODominio`, a corrida HTTP do M05,
 as matrizes e as proteções.
@@ -637,31 +893,68 @@ das operações é bidirecional.
 | `Float`, `Boolean` ou qualquer escalar sem dimensão normativa | **falha fechada** até a spec classificá-lo |
 | tipo de entrada | CORPO de objeto, mais uma dimensão por campo |
 
+**Três naturezas de combinação, e por que elas não se misturam**
+
+A primeira versão desta varredura tratava tudo como uma tupla só, e isso a tornou
+semanticamente falsa: as variantes de documento eram textos fixos — `consulta(id: 42)`, por
+exemplo — e o laço registrava como executada a operação da vez. Uma combinação rotulada
+`Query.consultasDoPaciente` executava, na verdade, `consulta`. Cinco rótulos diferentes, um
+único ataque. O mesmo valia para o corpo HTTP: recusar um corpo `null` é uma propriedade da
+fronteira de transporte, não de cada operação, e contá-la cinco vezes inflava `E` sem
+exercitar nada a mais.
+
+| Natureza | Tupla | Cardinalidade |
+|---|---|---|
+| Vinculada ao schema | (operação, entrada, dimensão, variante) | uma entrada por argumento ou campo de objeto de entrada descoberto |
+| Documento da operação | (operação, `<documento>`, variante) | uma por operação, com o documento **gerado** a partir dela |
+| Transporte global | (`<graphql-http>`, `<corpo>`, variante) | **uma só**, nunca multiplicada pelas operações |
+
 **Catálogo, com mínimos obrigatórios**
 
-| Dimensão | Variantes mínimas |
-|---|---|
-| UUID | malformado; inexistente; nil; vazio; número JSON; lista no lugar de escalar; nulo em obrigatório. |
-| ENUM | inexistente; caixa divergente; vazio; número; elemento nulo em lista não nula. |
-| DATA | as bordas de `DATAS_HOSTIS`; sem offset; número JSON. |
-| TEXTO | vazio; espaços; 10 000 ou mais caracteres; NUL e controle; unicode de 4 bytes; SQL; HTML; número ou objeto no lugar. |
-| INTEIRO | o catálogo REST, aplicado quando `Int` existir. |
-| CORPO — HTTP | JSON malformado; ausente; `null`; array; escalar; `text/plain`; `query` ausente ou não string; `variables` não objeto; `operationName` inexistente. |
-| CORPO — documento | sintaxe inválida; vazio; campo inexistente; argumento desconhecido; literal de tipo incompatível; variável não declarada ou com tipo divergente; duas operações sem `operationName`. |
-| CORPO — objeto de entrada | escalar; lista; campo desconhecido, inclusive autor e ids; obrigatório ausente; objeto vazio; nulo. |
+| Dimensão | Natureza | Variantes mínimas |
+|---|---|---|
+| UUID | vinculada | malformado; inexistente; nil; vazio; número JSON; lista no lugar de escalar; nulo em obrigatório. |
+| ENUM | vinculada | inexistente; caixa divergente; vazio; número; elemento nulo em lista não nula. |
+| DATA | vinculada | as bordas de `DATAS_HOSTIS`; sem offset; formato local; número JSON. |
+| TEXTO | vinculada | vazio; espaços; 10 000 caracteres; NUL e controle, nas bordas e no meio; unicode de 4 bytes; SQL; HTML; número ou objeto no lugar. |
+| INTEIRO | vinculada | o catálogo REST, aplicado quando `Int` existir no schema. |
+| OBJETO | vinculada | escalar; lista; campo desconhecido, inclusive autor e ids; obrigatório ausente; objeto vazio; nulo. |
+| DOCUMENTO | por operação | sintaxe inválida; vazio; campo inexistente; argumento desconhecido; literal de tipo incompatível; variável não declarada; variável com tipo divergente; duas operações sem `operationName`. |
+| CORPO_HTTP | global | JSON malformado; ausente; `null`; array; escalar; `text/plain`; `query` ausente; `query` não string; `variables` não objeto; `operationName` inexistente. |
 
-**Plano e controles.** Valores por variáveis. MEDICO nas operações clínicas; PACIENTE em
-`minhasConsultas`. A mutação usa alvo novo por combinação. O controle exige ausência de `errors` e
-dados produzidos pelo resolver.
+**Documentos gerados a partir da operação-alvo.** Nenhuma variante de documento carrega o nome
+de uma operação fixa. O gerador recebe a raiz (`query` ou `mutation`), o nome da operação e **um
+argumento real dela**, e produz os oito documentos. Quando a variante precisa de um valor
+incompatível, o argumento usado é o da própria operação — `filtro: 42` em `minhasConsultas`,
+`input: 42` em `corrigirRegistroHistorico` —, e nunca o argumento de outra.
+
+**Guardas do modelo**, unitárias, que reprovam:
+
+- documento rotulado para uma operação que executa outra;
+- gerador que devolve documento fixo, com nome de operação embutido;
+- variante de transporte contabilizada uma vez por operação, em vez de uma vez ao todo;
+- combinação exigida e não executada;
+- ataque órfão, sem entrada, documento ou transporte correspondente.
+
+**Cardinalidade.** `E` é a soma das três naturezas: entradas descobertas × variantes da dimensão,
+mais operações × variantes de documento, mais as variantes de transporte. Com o schema servido
+hoje — 27 entradas em 5 operações — são 242 vinculadas (UUID 28, ENUM 35, DATA 105, TEXTO 50,
+OBJETO 24), 40 de documento e 10 de transporte: **292**. As contagens são impressas pela suíte, e
+o número normativo é o que ela imprime, não o que está escrito aqui.
+
+**Plano e controles.** Valores por variáveis, com os nomes dos próprios argumentos. MEDICO nas
+operações clínicas; PACIENTE em `minhasConsultas`, a única em que esse perfil é o controle
+correto. A mutação usa alvo novo por combinação. O controle exige ausência de `errors` e dados
+produzidos pelo resolver.
 
 **Asserções.** Nenhum 5xx; nenhum `INTERNAL_ERROR`; apenas `BAD_REQUEST`, `NOT_FOUND` e
 `FORBIDDEN`; fronteira HTTP em 4xx; nenhum vazamento; entrada recusada sem alteração no snapshot
 nem na trilha.
 
 **Execução.** A mesma estrutura de D7, sem fábrica dinâmica: cinco métodos `@Test` ordinários e
-ordenados — controles, passagem 1, passagem 2, controles finais e comparação `E = D × V`, com as
-dimensões presentes no schema. As falhas são agregadas e as contagens impressas por combinação, e
-a execução verde produz os cinco casos no `TEST-*.xml` da suíte.
+ordenados — controles, passagem 1, passagem 2, controles finais e comparação `E = D × V` nas três
+naturezas, com as dimensões presentes no schema. As falhas são agregadas e as contagens impressas
+por combinação, e a execução verde produz os cinco casos no `TEST-*.xml` da suíte.
 
 **Preservado:** `MatrizDeAutorizacaoGraphqlIT` (15 células), `CoberturaDeAutorizacaoGraphqlTest`,
 `ErrosGraphqlIT`, `SegurancaGraphqlIT`, `EntradasHostisHistoricoIT` e as proteções do M09.
@@ -785,7 +1078,7 @@ Qualquer resíduo leva ao código 5.
 |---|---|---|
 | Suíte dirigida | `-pl` dos módulos de código com `verify` e filtros, mais `-pl quality-gates -am test` | Ciclo curto que nunca aciona os gates globais. |
 | Topologia | `mvn validate`, **sem `-q`** | O Reactor Summary é a evidência: sete projetos — raiz, cinco módulos de código e `quality-gates` —, com o `quality-gates` por último. |
-| Versão sentinela | `mvn -Drevision=0.0.0-SENTINELA-M10 -DskipTests package`, **sem `-q`**, seguido de `mvn -q clean` | Scenario "Alteração de versão em um único ponto": **sete entradas** no Reactor Summary e **sete `.flattened-pom.xml`** — o da raiz e os de cada um dos seis módulos —, todos com a versão sentinela e sem `${revision}`. |
+| Versão sentinela | `mvn -Drevision=0.0.0-SENTINELA-M10 -DskipTests package`, **sem `-q`**, seguido de `mvn -q clean` | Scenario "Alteração de versão em um único ponto": **sete entradas** no Reactor Summary e **sete `.flattened-pom.xml`** — o da raiz e os de cada um dos seis módulos —, todos com a versão sentinela, sem `${revision}` em parte alguma, inclusive em `<dependencies>`, e com as dependências internas apontando para a versão sentinela. |
 | Gate global | `mvn -q clean verify`, na raiz, sem filtro | Sessão, suítes, auditoria e cobertura. |
 | Clone limpo isolado | `mvn -Dmaven.repo.local=<tmp>` com `test`, `package` e `verify`; smoke com `MAVEN_ARGS=-Dmaven.repo.local=<tmp>` | Origens da G2 registradas e `<tmp>/br/com/fiap/hospital` ausente. |
 | Smoke | `scripts/smoke-test.sh`, duas vezes | Fluxo ponta a ponta e ausência de órfãos. |
@@ -859,6 +1152,93 @@ As mutações manuais já provadas por negativos automatizados foram removidas.
 - **`openspec/config.yaml`:** atualizado no commit do módulo (task 5.2).
 - **Sem alteração:** CHANGELOG e versão, que ficam para a release.
 
+### D17. Hardening mínimo de produção descoberto pela varredura
+
+A primeira execução completa da varredura de D7 produziu **5xx reproduzíveis nas duas passagens**.
+São defeitos de produção, não do teste: o Requirement aprovado diz que nenhuma entrada hostil
+produz 5xx. Tolerá-los como exceção conhecida foi **reprovado**, e abrir change separado também —
+o defeito impede o fechamento legítimo do M10 e foi revelado pelo gate que o próprio M10 introduz.
+O que segue é o escopo **mínimo** que torna verdadeira uma garantia já aprovada.
+
+| # | Sintoma observado | Causa | Correção | Resposta |
+|---|---|---|---|---|
+| 1 | `GET /consultas?de=` ou `?ate=` com `OffsetDateTime.MAX`/`MIN` → `DataIntegrityViolationException`, `timestamp out of range` | O limite do intervalo chega cru ao SQL, e o `timestamptz` do PostgreSQL tem faixa menor que a de `OffsetDateTime` | Faixa temporal persistível definida em **um único ponto**, aplicada a `de` e `ate` antes do repositório | 400 |
+| 2 | `PATCH /{id}/cancelar` com NUL no `motivo` → `MensagemInvalidaException: CAMPO em motivoCancelamento` | Dois defeitos juntos. O NUL é incompatível com os três destinos: a coluna `text` o recusa (`invalid byte sequence for encoding "UTF8": 0x00`), o `jsonb` do outbox também (`unsupported Unicode escape sequence`), e como parâmetro da consulta de credencial ele derruba o comando. E `Consulta.cancelar` validava `isBlank()` mas gravava `motivo.trim()`: como `trim()` remove tudo ≤ U+0020, um motivo só de controles passava na validação e ficava vazio — que o contrato recusa, já com a consulta cancelada | NUL recusado antes de mutar, persistir, publicar ou consultar credencial; e motivo vazio **depois de aparado** tratado como motivo vazio, pela regra preexistente. Controles diferentes de NUL não são recusados: a caracterização mostrou U+0001 e U+001F no meio do texto atravessando coluna, outbox e evento sem perda | 422 |
+| 3 | `PATCH /{id}/cancelar` com chave JSON duplicada → `HttpMessageConversionException` | O tratador cobre `HttpMessageNotReadableException`; a detecção estrita de duplicata chega na outra forma e escapa para o catch-all | Tratar a falha de **leitura** da requisição também nessa forma concreta, para todos os corpos | 400 |
+| 4 | `POST /consultas` com `duracaoMinutos = 2147483647` → 201, agenda do médico ocupada até o ano 6109 | O horizonte é verificado sobre o **início** do período; o fim não é verificado nem protegido de estouro | O horizonte de `Consulta.HORIZONTE_MAXIMO_MESES` passa a valer para o fim exclusivo, na criação e na alteração | 422 |
+
+**Limites da correção**, para que ela não vire outra coisa:
+
+- nenhum limite clínico arbitrário de duração é inventado: a regra reaproveita o horizonte
+  existente, e nenhum número mágico novo é espalhado por controllers ou testes;
+- `DataIntegrityViolationException` **não** é convertida genericamente em erro do cliente: violação
+  de integridade não relacionada continua sendo falha real;
+- **leitura e escrita são separadas explicitamente.** Não existe exceção concreta que cubra
+  apenas a leitura nesta forma — a duplicata chega como o próprio `HttpMessageConversionException`,
+  e não como `HttpMessageNotReadableException` —, então a opção adotada é o **handler do supertipo
+  com guarda obrigatória**: `HttpMessageNotWritableException` é **relançada**, nunca convertida.
+  Falha ao escrever a resposta é defeito do serviço, e respondê-la como 400 esconderia o bug atrás
+  de um erro do cliente. A guarda é verificada por teste próprio, que fica vermelho se ela sair;
+- o domínio de agendamento **não** passa a depender de `shared-contracts`: a política de caracteres
+  é reproduzida explicitamente, com a razão registrada no código, para que uma entrada aceita pelo
+  domínio não seja recusada depois na serialização do evento;
+- a normalização de espaços é a preexistente — nulo ou em branco vira nulo, o resto é aparado —,
+  com uma guarda: texto que fica vazio depois de aparado é tratado como branco. Controles nas bordas
+  continuam aparados como os espaços sempre foram; isso fica caracterizado por regressão, e não é
+  regra nova.
+
+**Regressões dirigidas**, além das duas passagens da varredura: uma por correção, provando a
+resposta, a ausência de efeito — consulta inalterada, nada em `outbox_evento`, nada publicado — e um
+controle válido imediatamente dentro da fronteira adotada, para que a correção não recuse o
+legítimo.
+
+### D18. Hardening do histórico descoberto pela varredura GraphQL
+
+A varredura de D8, com o modelo de prova corrigido, produziu **41 ocorrências por passagem**,
+reproduzidas nas duas. São defeitos de produção do `historico-service`, da mesma natureza dos de
+D17, e seguem o mesmo protocolo: artefato normativo primeiro, hardening mínimo depois, regressão
+dirigida por família, e controle válido dentro de cada fronteira.
+
+| # | Família | Onde | Sintoma | Ocorrências |
+|---|---|---|---|---:|
+| 1 | Identificador não-UUID | `consulta(id)`, `consultasDoPaciente(pacienteId)`, `consultasDoMedico(medicoId)` — malformado, vazio, número JSON, lista | `INTERNAL_ERROR` | 10 |
+| 2 | Instante fora da faixa persistível | `filtro.de`, `filtro.ate` nas três consultas e `input.dataHora` na correção — bordas máxima e mínima | `INTERNAL_ERROR` (`timestamp out of range`) | 14 |
+| 3 | Texto com caractere de controle | `input.justificativa`, `pacienteNome`, `medicoNome`, `especialidade`, `observacoes` — NUL nas bordas e no meio | `INTERNAL_ERROR` | 10 |
+| 4 | Texto acima do limite da coluna | `input.pacienteNome`, `medicoNome`, `especialidade` com 10 000 caracteres | `INTERNAL_ERROR` | 3 |
+| 5 | Literal incompatível como `ID` | documento de `consulta`, `consultasDoPaciente`, `consultasDoMedico` com `42` | `INTERNAL_ERROR` | 3 |
+| 6 | Corpo HTTP `null` | fronteira `/graphql` | **HTTP 500** sem corpo GraphQL | 1 |
+
+A família 5 tem a mesma causa da 1: o literal numérico é coagido a `ID`, e o identificador chega
+ao resolver sem validação. As famílias 3 e 4 só aparecem na mutação porque é a única operação que
+escreve. `justificativa` e `observacoes` não estouram por tamanho — são colunas de texto livre —,
+mas estouram pelo NUL. A caracterização contra o PostgreSQL real mostrou que só o U+0000 é incompatível — `invalid byte sequence` na coluna e `unsupported Unicode escape sequence` no `jsonb` —, enquanto U+0001 e U+001F isolados atravessam correção, snapshot e trilha; a política recusa, portanto, exatamente o NUL.
+
+**Correções, com o limite de cada uma**
+
+- **Identificador:** validar o formato UUID **antes** do repositório, com `BAD_REQUEST`. O
+  `ID` do GraphQL não distingue formato; quem distingue é o serviço.
+- **Instante:** faixa temporal persistível definida num único ponto do histórico, aplicada aos
+  limites do filtro e à data corrigida, com `BAD_REQUEST` antes de qualquer consulta ou escrita.
+- **Texto:** política de caracteres representáveis aplicada aos cinco campos de texto da
+  correção, antes de mutar o snapshot ou escrever a trilha.
+- **Tamanho:** os limites vêm da V1 — `paciente_nome`, `medico_nome` e `especialidade` são
+  `VARCHAR(255)`, contados em caracteres, como o PostgreSQL conta — por code point, e não por
+  unidade UTF-16. Nenhum número novo é inventado, e `justificativa` e `observacoes`, que são
+  texto livre, não ganham teto arbitrário.
+- **Corpo HTTP:** corpo nulo ou estruturalmente inválido é recusado na fronteira, com 4xx
+  sanitizado, antes de qualquer execução GraphQL.
+
+**O que a correção não é.** `DataIntegrityViolationException` **não** vira `BAD_REQUEST`, e
+nenhum catch-all classifica causa de banco como erro do cliente: o que se corrige é a validação
+das causas previsíveis antes da persistência. Onde a exceção legítima chegar embrulhada pelo
+GraphQL ou pelo Spring, o desembrulho é restrito, nominal e testado — nunca uma varredura de
+causas que rebaixe falha real de servidor a erro de entrada.
+
+**Semântica preservada.** Campo ausente continua significando "não corrigir"; nulo explícito
+continua sendo aceito apenas em `observacoes`, onde limpa o registro. Nenhuma recusa altera
+snapshot ou trilha, e cada regressão traz um controle válido imediatamente dentro da fronteira
+adotada — sem ele, uma correção que recusasse tudo passaria igual.
+
 ## Alternativas rejeitadas
 
 | Alternativa | Por que foi rejeitada |
@@ -890,6 +1270,11 @@ As mutações manuais já provadas por negativos automatizados foram removidas.
 | `tmpfs`; `repackage` sem classifier; `java -cp` | Permissões variam; troca o artefato do reactor; separador frágil. |
 | Mesmo protocolo para mutação de arquivo e injeção operacional | Injeção não tem SHA a restaurar; exige outra prova de ausência de efeito. |
 | Varreduras obrigatórias por `@TestFactory` | Uma fábrica que emite zero testes não deixa caso no `TEST-*.xml`: um falso verde que a auditoria por família não detecta. |
+| Tolerar os 5xx de D17 como exceção conhecida no catálogo | Contraria o Requirement aprovado e esvazia justamente a garantia que a varredura existe para dar. |
+| Corrigir os 5xx de D17 em change separado | O defeito impede o fechamento legítimo do M10 e foi revelado pelo gate que o M10 introduz; a varredura ficaria vermelha até lá. |
+| Converter `DataIntegrityViolationException` em 4xx | Esconderia violação de integridade real, que é falha de servidor, atrás de uma resposta de erro do cliente. |
+| Capturar o supertipo `HttpMessageConversionException` sem discriminar leitura de escrita | Transformaria falha de escrita da resposta e defeito de configuração em 400. O supertipo **é** tratado, mas com guarda que relança `HttpMessageNotWritableException` (D17). |
+| Limite clínico arbitrário de duração em minutos | Número novo sem fonte normativa; o horizonte de agendamento já é a regra existente e suficiente. |
 
 ## Risks / Trade-offs
 
@@ -902,6 +1287,7 @@ As mutações manuais já provadas por negativos automatizados foram removidas.
 | Análise sem atribuição completa de tipos | Fail-closed na ambiguidade, mais evidência runtime. |
 | Remoção da sessão apagar além das evidências | Alvos restritos e verificados. |
 | Varreduras lentas | Tempo registrado; acima de 2 minutos, o apply para, sem cortar variantes. |
+| Correção de produção dentro de uma change de testes (D17) | Escopo fechado nas quatro causas observadas, autorizado explicitamente; Scenarios normativos próprios; regressões dirigidas com controle dentro da fronteira; nenhuma regra existente afrouxada. |
 | Git Bash, CRLF e sinais | `MSYS_NO_PATHCONV`, `docker cp`, `.gitattributes`, `jobs -p`, evidência em Windows e Linux. |
 | IDE resolver o test-jar de outro modo | O gate normativo é o Maven CLI. |
 | Log do sender mudar no M11 | O smoke falha, em vez de passar. |

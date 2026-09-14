@@ -64,3 +64,55 @@ Cada operação e cada entrada atacada SHALL ter um controle válido, com creden
 - **WHEN** a varredura completa é executada duas vezes seguidas
 - **THEN** as duas passagens produzem apenas respostas sem 5xx nem erro interno
 - **AND** os controles de todas as operações continuam respondendo sem erro ao final
+
+### Requirement: Entrada extrema da superfície GraphQL é recusada antes de qualquer efeito
+
+Uma entrada sintaticamente válida que o histórico não consiga atender de forma íntegra SHALL ser recusada na própria requisição, com código estável e sanitizado, e não SHALL falhar depois — nem no repositório, nem na escrita do snapshot, nem na trilha.
+
+Identificador recebido como `ID` SHALL ser validado como UUID antes de alcançar o repositório, e o identificador inválido SHALL ser recusado com `BAD_REQUEST`, seja ele informado por variável ou por literal no documento.
+
+Os limites temporais do filtro e a data corrigida SHALL ser recusados com `BAD_REQUEST` quando estiverem fora da faixa temporal que o armazenamento representa, antes de qualquer consulta ou escrita. Violação de integridade não relacionada SHALL continuar exposta como falha real, e não SHALL ser convertida em erro do cliente.
+
+Os textos da correção SHALL aceitar apenas caracteres representáveis pelo armazenamento e pela trilha de auditoria. Os campos `pacienteNome`, `medicoNome` e `especialidade` SHALL respeitar o limite de tamanho declarado na migração que os criou, e não um limite arbitrário. `justificativa` e `observacoes` SHALL recusar caracteres incompatíveis com a persistência, preservando a semântica existente de campo ausente e de nulo explícito.
+
+Corpo HTTP nulo ou estruturalmente inválido SHALL ser recusado na fronteira com 4xx sanitizado, antes de qualquer execução GraphQL.
+
+Nenhuma dessas recusas SHALL alterar o snapshot ou a trilha.
+
+#### Scenario: Identificador inválido é recusado antes do repositório
+- **WHEN** uma operação recebe um identificador que não é UUID — malformado, vazio, número ou lista —, por variável ou por literal no documento
+- **THEN** a resposta tem código `BAD_REQUEST`, sem erro interno
+- **AND** o repositório não é consultado e nada é escrito
+- **AND** um identificador válido continua respondendo normalmente
+
+#### Scenario: Limite temporal fora da faixa persistível é recusado antes da consulta
+- **WHEN** `filtro.de` ou `filtro.ate` recebe um instante fora da faixa que o armazenamento representa
+- **THEN** a resposta tem código `BAD_REQUEST`, sem erro interno
+- **AND** um limite imediatamente dentro da faixa continua listando normalmente
+
+#### Scenario: Data corrigida fora da faixa persistível é recusada antes da escrita
+- **WHEN** a correção informa `dataHora` fora da faixa que o armazenamento representa
+- **THEN** a resposta tem código `BAD_REQUEST`
+- **AND** o snapshot permanece como estava e nenhuma trilha é registrada
+
+#### Scenario: Texto da correção com caractere não representável é recusado
+- **WHEN** qualquer texto da correção contém caractere de controle incompatível, nas bordas ou no meio
+- **THEN** a resposta tem código `BAD_REQUEST`
+- **AND** o snapshot permanece como estava e nenhuma trilha é registrada
+- **AND** texto legítimo com acento, quebra de linha e tabulação continua aceito
+
+#### Scenario: Texto da correção acima do limite da coluna é recusado
+- **WHEN** `pacienteNome`, `medicoNome` ou `especialidade` excede o tamanho declarado na migração que criou a coluna
+- **THEN** a resposta tem código `BAD_REQUEST`
+- **AND** um valor exatamente no limite continua sendo aceito
+- **AND** os campos de texto livre não ganham teto arbitrário
+
+#### Scenario: Corpo HTTP inválido é recusado na fronteira
+- **WHEN** a requisição chega com corpo nulo, ausente ou estruturalmente inválido
+- **THEN** a resposta é 4xx, sem rastreamento de pilha, nome de classe, SQL ou nome de tabela
+- **AND** nenhuma operação é executada
+
+#### Scenario: Recusa de entrada extrema não altera snapshot nem trilha
+- **WHEN** qualquer entrada extrema é recusada, em qualquer das fronteiras acima
+- **THEN** o snapshot da consulta alvo permanece idêntico ao anterior à requisição
+- **AND** a contagem da trilha permanece a mesma

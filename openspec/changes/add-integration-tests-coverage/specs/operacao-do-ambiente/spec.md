@@ -68,6 +68,18 @@ O gate SHALL falhar fechado quando:
 - faltar um módulo de código, os pacotes de uma subárvore ou o contador de linhas;
 - o total de linhas de um escopo for zero.
 
+Cada módulo de código e o relatório como um todo SHALL declarar exatamente um contador de linhas válido. Todo pacote de cada um dos cinco módulos SHALL ser validado antes do cálculo de qualquer escopo, e a mesma contagem validada SHALL alimentar a reconciliação e os escopos:
+
+- um pacote com contador de linhas válido contribui com esse contador;
+- um pacote legitimamente sem linhas executáveis contribui com zero linhas cobertas e zero perdidas somente quando declara ao menos uma classe e ao menos um arquivo-fonte e não contém, em toda a sua subárvore, nenhum contador, nenhum método e nenhuma linha;
+- um pacote com qualquer outro contador ou evidência executável e sem contador de linhas SHALL falhar o gate;
+- um pacote vazio ou estruturalmente ambíguo SHALL falhar o gate;
+- a soma das linhas dos pacotes de cada módulo, incluindo os pacotes sem linhas executáveis, SHALL ser exatamente igual ao contador de linhas do módulo;
+- a soma das linhas dos módulos SHALL ser exatamente igual ao contador de linhas do relatório;
+- as subárvores `domain` e `application` SHALL existir e ter total de linhas positivo.
+
+A garantia observável é que a ausência acidental do contador de linhas, um relatório sem informação de linha sobre código executável e a inconsistência entre pacote, módulo e relatório são recusados. Não se afirma que toda adulteração deliberada do relatório seja distinguível.
+
 As únicas classes excluídas da medição SHALL ser as classes de inicialização `*Application` dos serviços. Qualquer outra exclusão SHALL exigir alteração desta especificação.
 
 #### Scenario: Cobertura acima dos pisos é aceita
@@ -105,6 +117,12 @@ As únicas classes excluídas da medição SHALL ser as classes de inicializaç�
 #### Scenario: Módulo, pacote, contador ou dados de execução ausentes falham fechado
 - **WHEN** falta no relatório um dos cinco módulos de código, os pacotes de uma subárvore ou o contador de linhas, falta um total de linhas, ou um módulo de código não produziu dados de execução de cobertura na sessão
 - **THEN** o build falha identificando o elemento ausente
+- **AND** o mesmo ocorre para pacote de qualquer módulo com evidência executável e sem contador de linhas, para pacote vazio e para soma dos pacotes divergente do contador do módulo
+
+#### Scenario: Pacote sem linhas executáveis contribui 0/0
+- **WHEN** um pacote de um módulo de código declara classes e arquivos-fonte e não contém contador, método nem linha em toda a sua subárvore, como um pacote só de interfaces
+- **THEN** o gate aceita o pacote com zero linhas cobertas e zero perdidas
+- **AND** a soma dos pacotes do módulo, incluindo esse, continua obrigada a igualar o contador de linhas do módulo
 
 #### Scenario: Evidência de outra sessão é recusada
 - **WHEN** o identificador da sessão de verificação está ausente ou pertence a outra execução

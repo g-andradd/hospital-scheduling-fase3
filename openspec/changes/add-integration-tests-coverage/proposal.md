@@ -35,6 +35,21 @@ ser melhoria e passou a ser compensação" (`docs/05`).
   - `POST /internal/lembretes/executar` é inventariado e classificado como sem entrada de negócio.
   - Nas duas superfícies, o conjunto executado é comparado ao descoberto, e matrizes e
     proteções existentes são preservadas.
+- **Hardening mínimo de produção, descoberto pela varredura** — autorizado depois que a primeira
+  execução completa da varredura REST produziu 5xx reproduzíveis nas duas passagens. Não é
+  ampliação de escopo: é o que falta para a garantia já aprovada de que nenhuma entrada hostil
+  produz 5xx ser verdadeira (D17):
+  - faixa temporal persistível centralizada, aplicada aos limites `de` e `ate` da listagem antes do
+    repositório, com 400;
+  - política de caracteres dos textos que viajam no evento — observações e motivo de cancelamento
+    —, com 422 antes de qualquer mutação, persistência ou publicação;
+  - chave JSON duplicada recusada com 400, em todos os corpos do inventário;
+  - horizonte máximo de agendamento aplicado ao **fim** do período, e não só ao início, na criação
+    e na alteração, com 422.
+- **Hardening do histórico, descoberto pela varredura GraphQL** — mesma natureza do anterior,
+  autorizado pelo mesmo protocolo depois que a varredura corrigida produziu 41 ocorrências por
+  passagem (D18): identificador não-UUID, instante fora da faixa persistível, texto com caractere
+  de controle, texto acima do limite da coluna e corpo HTTP nulo.
 - **Módulo técnico `quality-gates`** — **alteração deliberada da topologia, sujeita à aprovação.**
   Hoje o reactor tem **seis projetos Maven**: o POM raiz agregador e cinco módulos filhos. Depois
   do M10 terá **sete**: a raiz, os cinco módulos de código e o `quality-gates`, que é o **sexto
@@ -45,7 +60,9 @@ ser melhoria e passou a ser compensação" (`docs/05`).
     fora dessa contagem;
   - gera o relatório JaCoCo agregado, em XML e HTML;
   - aplica 85% global e 90% em `agendamento/domain` e `agendamento/application`, por soma de
-    linhas;
+    linhas, depois de validar todos os pacotes dos cinco módulos e reconciliar pacote → módulo →
+    relatório. Um pacote sem linhas executáveis, como um pacote só de interfaces, conta 0/0
+    somente nas condições estritas do D4;
   - audita as famílias de relatórios `TEST-*.xml`, recusando toda forma de seleção, exclusão,
     omissão ou tolerância suportada pelas versões fixadas do Surefire e do Failsafe, seja por
     parâmetro, seja por configuração efetiva dos POMs;
@@ -56,6 +73,11 @@ ser melhoria e passou a ser compensação" (`docs/05`).
   A evidência de execução corrente vem de uma **sessão de verificação** aberta no POM raiz por uma
   execução ativa em `build/plugins`, não herdada. No mesmo commit do módulo,
   `openspec/config.yaml` passa a listá-lo.
+
+  As dependências entre módulos do reactor passam a usar `${project.version}`; `${revision}` fica
+  só na versão do projeto raiz e no parent dos seis módulos. O flatten resolve as dependências
+  (`pomElements/dependencies=resolve`), para que nenhum POM gerado carregue placeholder literal; as
+  versões externas explicitadas ali são do POM resolvido, não dos POMs-fonte.
 - **Smoke `scripts/smoke-test.sh`.** Roda antes do M12, sem Dockerfile nem Compose final:
   - o preflight vem antes de qualquer recurso;
   - Postgres 16 e RabbitMQ 3.13 efêmeros, pela Docker CLI;
@@ -86,19 +108,23 @@ Nenhuma.
   - ADDED "Smoke ponta a ponta do fluxo principal".
 - `mensageria-de-eventos`: ADDED "Fixture canônica do contrato compartilhada por produtor e
   consumidores".
-- `agendamento-de-consultas`: ADDED "Superfície HTTP resistente a entradas hostis, verificada por
-  inventário".
-- `historico-de-consultas`: ADDED "Superfície GraphQL resistente a entradas hostis, verificada
-  pelo schema".
+- `agendamento-de-consultas`:
+  - ADDED "Superfície HTTP resistente a entradas hostis, verificada por inventário";
+  - ADDED "Entrada extrema é recusada antes de qualquer efeito" — consequência normativa das
+    correções autorizadas em D17.
+- `historico-de-consultas`:
+  - ADDED "Superfície GraphQL resistente a entradas hostis, verificada pelo schema";
+  - ADDED "Entrada extrema da superfície GraphQL é recusada antes de qualquer efeito" —
+    consequência normativa das correções autorizadas em D18.
 
-Ao todo, 8 Requirements e 71 Scenarios:
+Ao todo, 10 Requirements e 84 Scenarios:
 
 | Delta | Requirements | Scenarios |
 |---|---:|---:|
-| `operacao-do-ambiente` | 5 | 47 |
+| `operacao-do-ambiente` | 5 | 48 |
 | `mensageria-de-eventos` | 1 | 8 |
-| `agendamento-de-consultas` | 1 | 8 |
-| `historico-de-consultas` | 1 | 8 |
+| `agendamento-de-consultas` | 2 | 13 |
+| `historico-de-consultas` | 2 | 15 |
 
 ## Impact
 
@@ -108,9 +134,22 @@ Ao todo, 8 Requirements e 71 Scenarios:
   - módulo `quality-gates`;
   - versões explícitas de `maven-jar-plugin`, `exec-maven-plugin` e `maven-antrun-plugin`;
   - execução `repackage` (classifier `exec`) na gestão do `spring-boot-maven-plugin`;
-  - execução ativa e não herdada da sessão, em `build/plugins`.
+  - execução ativa e não herdada da sessão, em `build/plugins`;
+  - `pomElements/dependencies=resolve` na configuração central do `flatten-maven-plugin`, sem mudar
+    a versão do plugin.
+  - agente do Mockito por caminho determinístico — `dependency:copy-dependencies` para
+    `${project.build.directory}/agentes` e `@{argLine} -javaagent:${project.build.directory}/agentes/mockito-core.jar`
+    —, no lugar da coordenada `${org.mockito:mockito-core:jar}`, sobrescrevível pela linha de comando.
 - **POMs de módulo:** o `shared-contracts` ganha `test-jar`; os três serviços, a dependência
-  `test-jar` em escopo `test`.
+  `test-jar` em escopo `test`. Dependências entre módulos do reactor usam `${project.version}`.
+- **Produção (`agendamento-service`), só o hardening de D17:** faixa temporal persistível dos
+  filtros; política de caracteres dos textos do evento e da credencial; leitura de corpo com chave
+  duplicada, que inclui `spring.jackson.parser.strict-duplicate-detection` no `application.yml`
+  desse serviço; e o horizonte aplicado ao fim do período.
+- **Produção (`historico-service`), só o hardening de D18:** validação de identificador antes do
+  repositório; faixa temporal persistível nos limites do filtro e na data corrigida; política de
+  caracteres e limites de tamanho derivados da V1 nos textos da correção; e corpo HTTP inválido
+  recusado na fronteira `/graphql`.
 - **Testes:**
   - fixture no `shared-contracts` e nos três serviços;
   - `EntradasHostisIT` reestruturado, sem perda de casos;
@@ -125,10 +164,14 @@ Ao todo, 8 Requirements e 71 Scenarios:
 
 - **Contrato e mensageria:** envelope, payload, topologia, routing keys, outbox, entrega externa
   at-least-once e idempotência dos consumidores.
-- **Negócio e autorização:** regras de negócio, endpoints, schema GraphQL, a matriz normativa de
-  `docs/02` §3 e suas contagens, e todas as proteções estruturais existentes.
-- **Banco e serviços:** migrations, seed `V900`, `application.yml` dos serviços,
-  `docker-compose.yml` e `init.sql`.
+- **Negócio e autorização:** endpoints, schema GraphQL, a matriz normativa de `docs/02` §3 e suas
+  contagens, e todas as proteções estruturais existentes. As regras de negócio mudam **apenas** nas
+  quatro recusas de D17, que fecham entradas extremas hoje aceitas e depois falhas; nenhuma regra
+  existente é afrouxada, e nenhum caso legítimo passa a ser recusado.
+- **Banco e serviços:** migrations, seed `V900`, `docker-compose.yml` e `init.sql`. O
+  `application.yml` muda em **um único ponto**, no `agendamento-service`:
+  `spring.jackson.parser.strict-duplicate-detection`, exigido por D17.3. Os
+  `application.yml` da notificação e do histórico ficam intactos.
 - **Versionamento:** CHANGELOG e versão ficam para o fechamento da release.
 
 Nada do M11 ou do M12 é antecipado: nem Dockerfiles, Compose final, Mailpit, seed de consultas,
@@ -145,7 +188,7 @@ Actuator ou health; nem `correlationId` em logs ou ArchUnit.
 
 **Critérios de aceite:**
 
-- os 71 Scenarios com evidência;
+- os 84 Scenarios com evidência;
 - `mvn -q clean verify` verde na raiz, sem filtro, com pisos, auditoria e guarda de infraestrutura
   aceitos;
 - smoke verde duas vezes seguidas, sem recurso órfão;
