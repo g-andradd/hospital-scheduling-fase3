@@ -35,6 +35,7 @@
 
         <springdoc.version>2.8.6</springdoc.version>
         <jjwt.version>0.12.6</jjwt.version>
+        <archunit.version>1.4.1</archunit.version>
 
         <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
         <maven-dependency-plugin.version>3.6.1</maven-dependency-plugin.version>
@@ -96,6 +97,13 @@
                 <artifactId>jjwt-jackson</artifactId>
                 <version>${jjwt.version}</version>
                 <scope>runtime</scope>
+            </dependency>
+
+            <!-- Biblioteca core, sem o engine proprio: as regras rodam em metodos @Test que a auditoria reconhece. -->
+            <dependency>
+                <groupId>com.tngtech.archunit</groupId>
+                <artifactId>archunit</artifactId>
+                <version>${archunit.version}</version>
             </dependency>
 
             <dependency>

@@ -408,9 +408,9 @@ Os dois **409** têm `type` distinto, e a distinção não é cosmética. `confl
 
 ## 9. Observabilidade
 
-- `correlationId` gerado no filtro de entrada (ou lido do header `X-Correlation-Id`), colocado no MDC, propagado no header da mensagem AMQP e restaurado no MDC do consumidor. Rastreia um fluxo ponta a ponta nos três logs.
-- Actuator com `health`, `info`, `metrics` expostos.
-- Log em JSON no profile `docker`.
+- `correlationId` gerado no filtro de entrada dos três serviços (ou lido do header `X-Correlation-Id` não vazio), colocado no atributo da requisição, no header da resposta e no MDC, antes da cadeia de segurança — 401 e 403 levam o mesmo id. O agendamento o grava no outbox e no header `x-correlation-id` da mensagem; os consumidores da notificação e do histórico o colocam no MDC durante cada tentativa e fazem `MDC.clear()` ao final. Rastreia um fluxo ponta a ponta nos três logs: "Evento publicado" no relay, "Evento projetado" no histórico e a linha do `LogNotificationSender`. Os dois logs de sucesso saem antes do commit e registram a tentativa, não o efeito confirmado, que continua sendo o estado persistido.
+- Actuator com exatamente `health`, `info`, `metrics` e `prometheus` expostos, na mesma cadeia de segurança compartilhada. `health` e subcaminhos são públicos, sem detalhes; `/actuator`, `info`, `metrics` e `prometheus` exigem JWT válido de qualquer perfil; qualquer outro caminho de actuator é negado, mesmo com token. O `health` do agendamento não inclui o RabbitMQ (ADR-006) e o da notificação não inclui SMTP, cujo canal padrão é o log.
+- Log em JSON no profile `docker`, no formato `logstash` nativo do Spring Boot (`logging.structured.format.console` em `application-docker.yml`): `@timestamp`, `level`, `logger_name`, `message`, `service` e cada chave do MDC como campo próprio, como `correlationId`. Sem o profile, o log é textual.
 
 ## 10. Convenções de código e teste
 
@@ -422,6 +422,7 @@ Estas convenções são injetadas em toda requisição de planejamento pelo `con
 |---|---|
 | Pacote raiz `br.com.fiap.hospital` | Namespace único do projeto |
 | Clean Architecture **apenas** no `agendamento-service` | É onde as regras vivem. Nos outros dois seria boilerplate sem retorno — eles são adaptadores de evento |
+| Fronteiras do agendamento verificadas pelo `ArquiteturaDoAgendamentoTest` (ArchUnit, M11) | Direção `domain ← application ← infrastructure`; domínio sem Spring, JPA, Jackson ou Validation; um único método público `executar` por `*UseCase`; `@Entity` só em `infrastructure.persistence`; controllers sem repositório, porta de saída, mensageria ou caso de uso nu; nenhum acesso à saída padrão. A única exceção é nominal: o `JwtService` no `AutenticacaoController`, porque a emissão do token é da fronteira HTTP (§7) |
 | Records para DTOs | Imutabilidade e menos ruído |
 | Mapeamento domínio ↔ entidade **manual** | Sem MapStruct: a banca lê o código, e mapeamento gerado esconde o que está acontecendo |
 | `Clock` injetado, nunca `LocalDateTime.now()` | Sem isso não há como testar as regras de janela temporal (conflito de agenda, lembrete D-1) de forma determinística |

@@ -158,6 +158,10 @@ O roteiro não usa Compose nem imagens das aplicações, e não depende de estad
 **Pré-requisitos**, conferidos antes de criar qualquer recurso: Bash 4 ou superior (no Windows,
 o Git Bash), Docker com o daemon acessível, Java 21, Maven, curl e jq 1.6 ou superior.
 
+O jq é pré-requisito **só do smoke real**. O `mvn -q clean verify` e o `RoteiroDeSmokeTest` não
+dependem dele: os testes do roteiro injetam um jq controlado por `JQ_BIN`. Para apontar outro
+executável no smoke, use `JQ_BIN=/caminho/do/jq scripts/smoke-test.sh`; o padrão é `jq`.
+
 **O que ele faz, em ordem:**
 1. um build único,
    `mvn -q -DskipTests package -pl agendamento-service,notificacao-service,historico-service -am`,
@@ -165,12 +169,21 @@ o Git Bash), Docker com o daemon acessível, Java 21, Maven, curl e jq 1.6 ou su
 2. PostgreSQL 16 e RabbitMQ 3.13 efêmeros, com portas dinâmicas em `127.0.0.1` e credenciais
    aleatórias;
 3. os três serviços como processos `java -jar`, com porta atribuída pelo sistema e o mesmo
-   `JWT_SECRET` aleatório;
+   `JWT_SECRET` aleatório — o agendamento com os profiles `demo,docker`, a notificação e o
+   histórico com `docker`, portanto com logs JSON;
 4. login do médico do seed de demonstração;
-5. criação de uma consulta a 30 dias, com observação `smoke-<RUN_ID>`;
-6. a notificação comprovada pelo registro persistido e pela linha do canal de log com o mesmo
-   conteúdo;
-7. a mesma consulta lida no histórico por GraphQL.
+5. criação de uma consulta a 30 dias, com observação `smoke-<RUN_ID>` e
+   `X-Correlation-Id: smoke-<RUN_ID>`, conferido no header da resposta;
+6. o registro JSON "Evento publicado" do relay no log do agendamento, com a consulta e o mesmo
+   `correlationId`;
+7. a notificação comprovada pelo registro persistido e pelo registro JSON do canal de log com o
+   mesmo conteúdo e o mesmo `correlationId`;
+8. a mesma consulta lida no histórico por GraphQL, e o registro JSON "Evento projetado" com o
+   mesmo `correlationId`.
+
+Cada registro de log é identificado pela consulta da execução e precisa ter `@timestamp`,
+`level`, `logger_name`, `message` e `service`. Registro com outro `correlationId` termina com
+código 1; registro ausente no prazo, com código 3.
 
 Toda espera é condicional, com prazo absoluto.
 
@@ -204,6 +217,57 @@ fica para você apagar.
 
 Execuções **consecutivas** são independentes. Execuções **simultâneas no mesmo checkout não são
 suportadas**: o build único escreve nos mesmos `target/`.
+
+## Arquitetura verificada e observabilidade (M11)
+
+### Fronteiras da Clean Architecture
+
+O `ArquiteturaDoAgendamentoTest` roda no `mvn test` do `agendamento-service` e reprova o build
+quando uma fronteira é cruzada: direção `domain ← application ← infrastructure`, domínio sem
+Spring, JPA, Jackson ou Validation, um único método público `executar` por `*UseCase`, entidades
+JPA só em `infrastructure.persistence`, controllers só com os casos de uso transacionais e nenhum
+acesso à saída padrão. A única exceção é nominal: o `JwtService` no `AutenticacaoController`,
+porque a emissão do token pertence à fronteira HTTP ([ADR-007](docs/adr/ADR-007-clean-architecture-so-no-core.md)).
+
+### Correlação ponta a ponta
+
+Os três serviços honram `X-Correlation-Id` não vazio, geram um UUID na ausência e devolvem o valor
+no header — inclusive em 401 e 403, junto do `correlationId` do Problem Detail. O agendamento
+grava o id no outbox e no envelope; a notificação e o histórico o restauram no contexto de log
+durante o consumo. Um fluxo iniciado por uma criação de consulta aparece com o mesmo
+`correlationId` nos três logs.
+
+### Endpoints operacionais
+
+| Endpoint | Acesso |
+|---|---|
+| `/actuator/health` (e subcaminhos) | público, só `{"status":...}`, sem detalhes |
+| `/actuator`, `/actuator/info`, `/actuator/metrics`, `/actuator/prometheus` | token válido de qualquer perfil; sem token, 401 |
+| qualquer outro, como `env` e `beans` | não exposto e negado, mesmo com token |
+
+O `health` do agendamento não depende do RabbitMQ, porque o outbox mantém a API disponível sem
+broker ([ADR-006](docs/adr/ADR-006-transactional-outbox.md)); o da notificação não depende de SMTP,
+porque o canal padrão é o log.
+
+### Logs JSON no profile `docker`
+
+Com `SPRING_PROFILES_ACTIVE` contendo `docker`, cada serviço escreve no console um objeto JSON
+por linha, no formato `logstash` nativo do Spring Boot: `@timestamp`, `level`, `logger_name`,
+`message`, `service` e cada valor do contexto de log como campo próprio, como `correlationId`.
+Sem o profile, o log continua em texto.
+
+Suítes dirigidas do M11:
+
+```bash
+mvn -q -pl shared-security,agendamento-service,notificacao-service,historico-service -am verify \
+  -Dtest='ArquiteturaDoAgendamentoTest,CorrelationIdFilterTest,SegurancaAutoConfigurationTest' \
+  -Dit.test='CorrelacaoHttpIT,CorrelacaoHistoricoIT,CorrelacaoNotificacaoIT,ConsumoNotificacaoRabbitMqIT,ConsumoHistoricoRabbitMqIT,OutboxRelayIT,EndpointsOperacionaisIT,CadeiaDeSegurancaIT' \
+  -Dsurefire.failIfNoSpecifiedTests=false -Dfailsafe.failIfNoSpecifiedTests=false
+```
+
+```bash
+mvn -q -pl quality-gates -am test -Dtest='LogsEstruturadosTest,RoteiroDeSmokeTest,AuditoriaDeExecucaoTest,InfraestruturaRealTest' -Dsurefire.failIfNoSpecifiedTests=false
+```
 
 ## Executar a infraestrutura
 
