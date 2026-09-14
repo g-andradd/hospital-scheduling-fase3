@@ -176,7 +176,7 @@ Protocolo: SHA-256 antes, alterar só o alvo, menor gate vermelho, restaurar byt
   - gate de cobertura com os pisos de 85%, 90% e 90%.
 - [x] 10.3 Registrar a cobertura do código novo — filtros, MDC do histórico, logs de sucesso e caminhos operacionais — pelo relatório agregado, e confirmar que nenhuma exclusão de cobertura foi acrescentada.
 - [x] 10.4 Clone limpo: clonar a feature branch, depois do push e com autorização do Gabriel, num diretório criado com `mktemp -d` e validado sob `${TMPDIR:-/tmp}`, com repositório Maven temporário vazio e sem `install`. Executar **somente** `mvn -q -Dmaven.repo.local=<repo> clean verify`. Registrar código 0 e a ausência de artefato interno no repositório temporário. O smoke não é executado no clone; a execução real única da 7.1 na árvore da feature é a evidência runtime.
-- [ ] 10.5 Conferir pelo diff:
+- [x] 10.5 Conferir pelo diff:
   - nada de M12, M13 ou M14;
   - contrato, topologia, schema GraphQL, migrations, regras de negócio, matrizes e garantias inalterados;
   - o filtro do agendamento inalterado;
@@ -186,4 +186,4 @@ Protocolo: SHA-256 antes, alterar só o alvo, menor gate vermelho, restaurar byt
   - `jq` sem entrar como pré-requisito do build nem do `RoteiroDeSmokeTest`;
   - `CHANGELOG.md` e versão inalterados.
 - [x] 10.6 Montar no corpo do PR a matriz dos 23 Scenarios → classe e método de teste, ou comando registrado, sem Scenario sem evidência. Registrar a exceção nominal do `JwtService` e os riscos residuais do design.
-- [ ] 10.7 Confirmar a prontidão para archive: todas as tasks de 1.1 a 10.6 concluídas, e `openspec status --change add-archunit-observability` e `openspec validate add-archunit-observability --strict` verdes. O archive é feito na própria feature branch, depois da aprovação do PR e antes do merge.
+- [x] 10.7 Confirmar a prontidão para archive: todas as tasks de 1.1 a 10.6 concluídas, e `openspec status --change add-archunit-observability` e `openspec validate add-archunit-observability --strict` verdes. O archive é feito na própria feature branch, depois da aprovação do PR e antes do merge.
