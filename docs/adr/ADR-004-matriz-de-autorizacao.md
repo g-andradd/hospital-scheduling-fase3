@@ -55,7 +55,7 @@ A regra de propriedade — "só a própria" — não vive no controller. Vive no
 recebem um `SolicitanteAutenticado` como parâmetro obrigatório. Ver ADR-005 para por que essa
 separação importa.
 
-## Alternativas consideradas
+## Alternativas
 
 **Deixar o paciente sem confirmação, só com leitura.**
 Descartada. É a leitura mais restritiva do enunciado e a mais fácil de implementar, mas remove do
@@ -103,3 +103,5 @@ endpoint novo continua exigindo que alguém lembre de atualizar dois arquivos.
 
 Aceita. Implementada em `add-autenticacao-jwt` (M04), em `MatrizDeAutorizacao` e
 `MatrizDeAutorizacaoIT`. A matriz normativa está em `docs/02-especificacao-funcional.md` §3.
+
+Origem: [`add-autenticacao-jwt`](../../openspec/changes/archive/2026-09-04-add-autenticacao-jwt/).

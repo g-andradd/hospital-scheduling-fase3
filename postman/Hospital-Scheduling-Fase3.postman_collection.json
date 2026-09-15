@@ -1,0 +1,260 @@
+{
+  "info": {
+    "_postman_id": "9d57c947-b9b2-47a6-b408-3a5c9af03fa3",
+    "name": "Hospital Scheduling - Fase 3",
+    "description": "Jornada executável do ambiente demo. Execute a collection inteira e em ordem.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "00-Auth",
+      "item": [
+        {
+          "name": "00.1 Login médico",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "['medicoToken','enfermeiroToken','pacienteToken','paciente2Token','runId','slotBaseEpoch','slotTentativa','consultaId','consultaDataHora','consultaObservacoes','consultaObservacoesAtualizada','historicoObservacoes','historicoTentativas','correcaoTentativas'].forEach(function (nome) { pm.environment.unset(nome); });",
+                  "const runId = pm.variables.replaceIn('{{$guid}}');",
+                  "pm.environment.set('runId', runId);",
+                  "pm.environment.set('slotBaseEpoch', String(Date.now() + 7 * 24 * 60 * 60 * 1000));",
+                  "pm.environment.set('slotTentativa', '0');",
+                  "pm.environment.set('historicoTentativas', '0');",
+                  "pm.environment.set('correcaoTentativas', '0');",
+                  "pm.environment.set('consultaObservacoes', 'postman-' + runId);",
+                  "pm.environment.set('consultaObservacoesAtualizada', 'postman-atualizada-' + runId);",
+                  "pm.environment.set('historicoObservacoes', 'historico-' + runId);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('contrato e perfil MEDICO', function () { const b = pm.response.json(); pm.expect(b.accessToken).to.be.a('string').and.not.empty; pm.expect(b.expiresIn).to.be.a('number').and.above(0); pm.expect(b.perfil).to.eql('MEDICO'); pm.environment.set('medicoToken', b.accessToken); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {"mode": "raw", "raw": "{\n  \"email\": \"{{medicoEmail}}\",\n  \"senha\": \"{{medicoSenha}}\"\n}"},
+            "url": "{{agendamentoBaseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "00.2 Login enfermeiro",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('status 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('contrato e perfil ENFERMEIRO', function () { const b = pm.response.json(); pm.expect(b.accessToken).to.be.a('string').and.not.empty; pm.expect(b.expiresIn).to.be.a('number').and.above(0); pm.expect(b.perfil).to.eql('ENFERMEIRO'); pm.environment.set('enfermeiroToken', b.accessToken); });"
+          ]}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"email\": \"{{enfermeiroEmail}}\",\n  \"senha\": \"{{enfermeiroSenha}}\"\n}"}, "url": "{{agendamentoBaseUrl}}/auth/login"}
+        },
+        {
+          "name": "00.3 Login paciente",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('status 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('contrato e perfil PACIENTE', function () { const b = pm.response.json(); pm.expect(b.accessToken).to.be.a('string').and.not.empty; pm.expect(b.expiresIn).to.be.a('number').and.above(0); pm.expect(b.perfil).to.eql('PACIENTE'); pm.environment.set('pacienteToken', b.accessToken); });"
+          ]}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"email\": \"{{pacienteEmail}}\",\n  \"senha\": \"{{pacienteSenha}}\"\n}"}, "url": "{{agendamentoBaseUrl}}/auth/login"}
+        },
+        {
+          "name": "00.4 Login paciente 2",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('status 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('contrato e perfil PACIENTE 2', function () { const b = pm.response.json(); pm.expect(b.accessToken).to.be.a('string').and.not.empty; pm.expect(b.expiresIn).to.be.a('number').and.above(0); pm.expect(b.perfil).to.eql('PACIENTE'); pm.environment.set('paciente2Token', b.accessToken); });"
+          ]}}],
+          "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"email\": \"{{paciente2Email}}\",\n  \"senha\": \"{{paciente2Senha}}\"\n}"}, "url": "{{agendamentoBaseUrl}}/auth/login"}
+        }
+      ]
+    },
+    {
+      "name": "01-Agendamento",
+      "item": [
+        {
+          "name": "01.1 Listar consultas do paciente",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('status 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('página de consultas', function () { const b = pm.response.json(); pm.expect(b.conteudo).to.be.an('array'); pm.expect(b.total).to.be.a('number'); });"
+          ]}}],
+          "request": {"method": "GET", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{enfermeiroToken}}", "type": "string"}]}, "url": "{{agendamentoBaseUrl}}/api/v1/consultas?pacienteId={{pacienteId}}"}
+        },
+        {
+          "name": "01.2 Criar consulta em slot disponível",
+          "event": [
+            {"listen": "prerequest", "script": {"type": "text/javascript", "exec": [
+              "const tentativa = Number(pm.environment.get('slotTentativa') || '0');",
+              "const instante = new Date(Number(pm.environment.get('slotBaseEpoch')) + tentativa * 60 * 60 * 1000).toISOString();",
+              "pm.environment.set('consultaDataHora', instante);"
+            ]}},
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('status 201 ou conflito tratável 409', function () { pm.expect([201, 409]).to.include(pm.response.code); });",
+              "pm.test('contrato da criação ou do conflito', function () { const b = pm.response.json(); if (pm.response.code === 201) { pm.expect(b.id).to.be.a('string'); pm.expect(b.status).to.eql('AGENDADA'); pm.environment.set('consultaId', b.id); pm.environment.set('consultaDataHora', b.dataHora); } else { pm.expect(b.type).to.include('conflito-de-agenda'); pm.expect(b.correlationId).to.be.a('string').and.not.empty; } });",
+              "if (pm.response.code === 409) { const tentativa = Number(pm.environment.get('slotTentativa') || '0') + 1; pm.environment.set('slotTentativa', String(tentativa)); if (tentativa < 24) { pm.execution.setNextRequest(pm.info.requestName); } else { pm.test('limite de 24 tentativas não excedido', function () { pm.expect.fail('nenhum slot disponível após 24 tentativas'); }); } }"
+            ]}}
+          ],
+          "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{enfermeiroToken}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"pacienteId\": \"{{pacienteId}}\",\n  \"medicoId\": \"{{medicoId}}\",\n  \"registradoPorId\": \"{{enfermeiroUsuarioId}}\",\n  \"dataHora\": \"{{consultaDataHora}}\",\n  \"duracaoMinutos\": 30,\n  \"observacoes\": \"{{consultaObservacoes}}\"\n}"}, "url": "{{agendamentoBaseUrl}}/api/v1/consultas"}
+        },
+        {
+          "name": "01.3 Buscar consulta criada",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('status 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('consulta criada preservada', function () { const b = pm.response.json(); pm.expect(b.id).to.eql(pm.environment.get('consultaId')); pm.expect(b.dataHora).to.eql(pm.environment.get('consultaDataHora')); pm.expect(b.duracaoMinutos).to.eql(30); pm.expect(b.status).to.eql('AGENDADA'); });"
+          ]}}],
+          "request": {"method": "GET", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{pacienteToken}}", "type": "string"}]}, "url": "{{agendamentoBaseUrl}}/api/v1/consultas/{{consultaId}}"}
+        },
+        {
+          "name": "01.4 Alterar observações",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('status 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('observação atualizada', function () { const b = pm.response.json(); pm.expect(b.id).to.eql(pm.environment.get('consultaId')); pm.expect(b.observacoes).to.eql(pm.environment.get('consultaObservacoesAtualizada')); });"
+          ]}}],
+          "request": {"method": "PUT", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{enfermeiroToken}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"observacoes\": \"{{consultaObservacoesAtualizada}}\"\n}"}, "url": "{{agendamentoBaseUrl}}/api/v1/consultas/{{consultaId}}"}
+        },
+        {
+          "name": "01.5 Confirmar consulta",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('status 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('consulta confirmada e encadeada', function () { const b = pm.response.json(); pm.expect(b.id).to.eql(pm.environment.get('consultaId')); pm.expect(b.status).to.eql('CONFIRMADA'); pm.expect(b.observacoes).to.eql(pm.environment.get('consultaObservacoesAtualizada')); });"
+          ]}}],
+          "request": {"method": "PATCH", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{pacienteToken}}", "type": "string"}]}, "url": "{{agendamentoBaseUrl}}/api/v1/consultas/{{consultaId}}/confirmar"}
+        }
+      ]
+    },
+    {
+      "name": "02-Historico-GraphQL",
+      "item": [
+        {
+          "name": "02.1 Aguardar histórico confirmado",
+          "event": [
+            {"listen": "prerequest", "script": {"type": "text/javascript", "exec": [
+              "if (Number(pm.environment.get('historicoTentativas') || '0') > 0) { setTimeout(function () {}, 250); }"
+            ]}},
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('status HTTP 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('histórico confirmado ou NOT_FOUND transitório', function () { const b = pm.response.json(); const consulta = b.data && b.data.consulta; const notFound = b.errors && b.errors.length === 1 && b.errors[0].extensions && b.errors[0].extensions.code === 'NOT_FOUND'; const pronto = !b.errors && consulta && consulta.id === pm.environment.get('consultaId') && consulta.status === 'CONFIRMADA' && consulta.observacoes === pm.environment.get('consultaObservacoesAtualizada'); pm.expect(pronto || notFound, JSON.stringify(b)).to.eql(true); });",
+              "const b = pm.response.json(); const c = b.data && b.data.consulta; const pronto = !b.errors && c && c.status === 'CONFIRMADA' && c.observacoes === pm.environment.get('consultaObservacoesAtualizada'); if (!pronto) { const n = Number(pm.environment.get('historicoTentativas') || '0') + 1; pm.environment.set('historicoTentativas', String(n)); if (n < 20) { pm.execution.setNextRequest(pm.info.requestName); } else { pm.test('limite de 20 tentativas do histórico', function () { pm.expect.fail('projeção não convergiu'); }); } }"
+            ]}}
+          ],
+          "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{enfermeiroToken}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"query\":\"query Consulta($id: ID!) { consulta(id: $id) { id status observacoes pacienteId medicoId } }\",\"variables\":{\"id\":\"{{consultaId}}\"}}"}, "url": "{{historicoBaseUrl}}/graphql"}
+        },
+        {
+          "name": "02.2 Corrigir registro histórico",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('status HTTP 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('correção aceita sem errors', function () { const b = pm.response.json(); pm.expect(b.errors).to.be.undefined; pm.expect(b.data.corrigirRegistroHistorico.id).to.eql(pm.environment.get('consultaId')); pm.expect(b.data.corrigirRegistroHistorico.observacoes).to.eql(pm.environment.get('historicoObservacoes')); });"
+          ]}}],
+          "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{medicoToken}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"query\":\"mutation Corrigir($input: CorrigirRegistroHistoricoInput!) { corrigirRegistroHistorico(input: $input) { id observacoes } }\",\"variables\":{\"input\":{\"consultaId\":\"{{consultaId}}\",\"observacoes\":\"{{historicoObservacoes}}\",\"justificativa\":\"Correção Postman {{runId}}\"}}}"}, "url": "{{historicoBaseUrl}}/graphql"}
+        },
+        {
+          "name": "02.3 Aguardar correção observável",
+          "event": [
+            {"listen": "prerequest", "script": {"type": "text/javascript", "exec": ["if (Number(pm.environment.get('correcaoTentativas') || '0') > 0) { setTimeout(function () {}, 250); }"]}},
+            {"listen": "test", "script": {"type": "text/javascript", "exec": [
+              "pm.test('status HTTP 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('correção observada sem errors', function () { const b = pm.response.json(); const c = b.data && b.data.consulta; pm.expect(!b.errors && c && c.id === pm.environment.get('consultaId')).to.eql(true); if (c && c.observacoes === pm.environment.get('historicoObservacoes')) { pm.expect(c.observacoes).to.eql(pm.environment.get('historicoObservacoes')); } });",
+              "const b = pm.response.json(); const c = b.data && b.data.consulta; if (!c || c.observacoes !== pm.environment.get('historicoObservacoes')) { const n = Number(pm.environment.get('correcaoTentativas') || '0') + 1; pm.environment.set('correcaoTentativas', String(n)); if (n < 20) { pm.execution.setNextRequest(pm.info.requestName); } else { pm.test('limite de 20 tentativas da correção', function () { pm.expect.fail('correção não foi observada'); }); } }"
+            ]}}
+          ],
+          "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{enfermeiroToken}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"query\":\"query ConsultaCorrigida($id: ID!) { consulta(id: $id) { id status observacoes } }\",\"variables\":{\"id\":\"{{consultaId}}\"}}"}, "url": "{{historicoBaseUrl}}/graphql"}
+        },
+        {
+          "name": "02.4 Executar lembretes manualmente",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('status 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('quantidade não negativa', function () { const b = pm.response.json(); pm.expect(b.lembretesEnviados).to.be.a('number').and.at.least(0); });"
+          ]}}],
+          "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{enfermeiroToken}}", "type": "string"}]}, "url": "{{notificacaoBaseUrl}}/internal/lembretes/executar"}
+        }
+      ]
+    },
+    {
+      "name": "03-Cenarios-de-Seguranca",
+      "item": [
+        {
+          "name": "03.1 Consulta protegida sem token - 401",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('status 401', function () { pm.response.to.have.status(401); });",
+            "pm.test('Problem Detail 401 sanitizado', function () { const b = pm.response.json(); pm.expect(b.type).to.include('nao-autenticado'); pm.expect(b.title).to.be.a('string').and.not.empty; pm.expect(b.correlationId).to.be.a('string').and.not.empty; pm.expect(pm.response.text()).not.to.match(/java\\.|Exception|br\\.com\\.fiap/); });"
+          ]}}],
+          "request": {"method": "GET", "auth": {"type": "noauth"}, "url": "{{agendamentoBaseUrl}}/api/v1/consultas/{{consultaId}}"}
+        },
+        {
+          "name": "03.2 Paciente não cria consulta - 403",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('status 403', function () { pm.response.to.have.status(403); });",
+            "pm.test('Problem Detail 403 sanitizado', function () { const b = pm.response.json(); pm.expect(b.type).to.include('acesso-negado'); pm.expect(b.title).to.be.a('string').and.not.empty; pm.expect(b.correlationId).to.be.a('string').and.not.empty; pm.expect(pm.response.text()).not.to.match(/java\\.|Exception|br\\.com\\.fiap/); });"
+          ]}}],
+          "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{pacienteToken}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"pacienteId\": \"{{pacienteId}}\",\n  \"medicoId\": \"{{medicoId}}\",\n  \"registradoPorId\": \"{{pacienteUsuarioId}}\",\n  \"dataHora\": \"{{consultaDataHora}}\",\n  \"duracaoMinutos\": 30\n}"}, "url": "{{agendamentoBaseUrl}}/api/v1/consultas"}
+        },
+        {
+          "name": "03.3 Outro paciente não lê consulta - 403",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('status 403', function () { pm.response.to.have.status(403); });",
+            "pm.test('Problem Detail 403 sanitizado', function () { const b = pm.response.json(); pm.expect(b.type).to.include('acesso-negado'); pm.expect(b.title).to.be.a('string').and.not.empty; pm.expect(b.correlationId).to.be.a('string').and.not.empty; pm.expect(pm.response.text()).not.to.match(/java\\.|Exception|br\\.com\\.fiap/); });"
+          ]}}],
+          "request": {"method": "GET", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{paciente2Token}}", "type": "string"}]}, "url": "{{agendamentoBaseUrl}}/api/v1/consultas/{{consultaId}}"}
+        }
+      ]
+    },
+    {
+      "name": "04-Cenarios-de-Erro",
+      "item": [
+        {
+          "name": "04.1 Data passada - 422",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('status 422', function () { pm.response.to.have.status(422); });",
+            "pm.test('Problem Detail 422', function () { const b = pm.response.json(); pm.expect(b.type).to.include('agendamento-no-passado'); pm.expect(b.title).to.be.a('string').and.not.empty; pm.expect(b.correlationId).to.be.a('string').and.not.empty; });"
+          ]}}],
+          "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{enfermeiroToken}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"pacienteId\": \"{{pacienteId}}\",\n  \"medicoId\": \"{{medicoId}}\",\n  \"registradoPorId\": \"{{enfermeiroUsuarioId}}\",\n  \"dataHora\": \"2000-01-01T10:00:00Z\",\n  \"duracaoMinutos\": 30\n}"}, "url": "{{agendamentoBaseUrl}}/api/v1/consultas"}
+        },
+        {
+          "name": "04.2 Sobreposição - 409",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('status 409', function () { pm.response.to.have.status(409); });",
+            "pm.test('Problem Detail 409', function () { const b = pm.response.json(); pm.expect(b.type).to.include('conflito-de-agenda'); pm.expect(b.title).to.be.a('string').and.not.empty; pm.expect(b.correlationId).to.be.a('string').and.not.empty; });"
+          ]}}],
+          "request": {"method": "POST", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{enfermeiroToken}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"pacienteId\": \"{{paciente2Id}}\",\n  \"medicoId\": \"{{medicoId}}\",\n  \"registradoPorId\": \"{{enfermeiroUsuarioId}}\",\n  \"dataHora\": \"{{consultaDataHora}}\",\n  \"duracaoMinutos\": 30,\n  \"observacoes\": \"conflito-{{runId}}\"\n}"}, "url": "{{agendamentoBaseUrl}}/api/v1/consultas"}
+        },
+        {
+          "name": "04.3 Consulta original permanece intacta",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('status 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('snapshot original intacto após 409', function () { const b = pm.response.json(); pm.expect(b.id).to.eql(pm.environment.get('consultaId')); pm.expect(b.dataHora).to.eql(pm.environment.get('consultaDataHora')); pm.expect(b.duracaoMinutos).to.eql(30); pm.expect(b.status).to.eql('CONFIRMADA'); });"
+          ]}}],
+          "request": {"method": "GET", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{enfermeiroToken}}", "type": "string"}]}, "url": "{{agendamentoBaseUrl}}/api/v1/consultas/{{consultaId}}"}
+        },
+        {
+          "name": "04.4 UUID inexistente - 404",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('status 404', function () { pm.response.to.have.status(404); });",
+            "pm.test('Problem Detail 404', function () { const b = pm.response.json(); pm.expect(b.type).to.include('recurso-nao-encontrado'); pm.expect(b.title).to.be.a('string').and.not.empty; pm.expect(b.correlationId).to.be.a('string').and.not.empty; });"
+          ]}}],
+          "request": {"method": "GET", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{enfermeiroToken}}", "type": "string"}]}, "url": "{{agendamentoBaseUrl}}/api/v1/consultas/00000000-0000-0000-0000-000000000099"}
+        },
+        {
+          "name": "04.5 UUID malformado - 400",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('status 400', function () { pm.response.to.have.status(400); });",
+            "pm.test('Problem Detail 400', function () { const b = pm.response.json(); pm.expect(b.type).to.include('parametro-invalido'); pm.expect(b.title).to.be.a('string').and.not.empty; pm.expect(b.correlationId).to.be.a('string').and.not.empty; });"
+          ]}}],
+          "request": {"method": "GET", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{enfermeiroToken}}", "type": "string"}]}, "url": "{{agendamentoBaseUrl}}/api/v1/consultas/uuid-invalido"}
+        },
+        {
+          "name": "04.6 Cancelar consulta da execução",
+          "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+            "pm.test('status 200', function () { pm.response.to.have.status(200); });",
+            "pm.test('consulta cancelada e período liberado', function () { const b = pm.response.json(); pm.expect(b.id).to.eql(pm.environment.get('consultaId')); pm.expect(b.status).to.eql('CANCELADA'); });"
+          ]}}],
+          "request": {"method": "PATCH", "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{enfermeiroToken}}", "type": "string"}]}, "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\n  \"motivo\": \"Limpeza da execução Postman {{runId}}\"\n}"}, "url": "{{agendamentoBaseUrl}}/api/v1/consultas/{{consultaId}}/cancelar"}
+        }
+      ]
+    }
+  ]
+}

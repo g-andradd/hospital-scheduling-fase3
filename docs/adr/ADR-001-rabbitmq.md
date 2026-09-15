@@ -14,7 +14,7 @@ Publicação usa mensagens persistentes, mandatory, confirms correlacionados e r
 
 A factory compartilhada usa reconhecimento AUTO, default-requeue-rejected=false e uma cadeia stateless: três tentativas totais, intervalos de 1s e 2s (configuração initial=1000ms, multiplier=2, max=10000ms). A conversão/validação estrita ocorre dentro do retry; o recoverer rejeita sem requeue para a DLX. Não há consumidores de negócio antecipados no M05.
 
-## Alternativas consideradas
+## Alternativas
 
 - Kafka: suas capacidades de log distribuído não atendem a uma necessidade adicional deste escopo e alterariam o contrato normativo.
 - Filas clássicas com dead-lettering padrão: podem perder mensagens durante a transferência ao destino indisponível.
@@ -30,6 +30,8 @@ A recuperação do dead-letter worker pode demorar: o RabbitMQ 3.13 usa interval
 ## Status
 
 Aceita no M05. Implementação e verificação registradas em openspec/changes/add-event-publishing-outbox; promoção da capability ocorre no archive após aprovação do PR.
+
+Origem: [`add-event-publishing-outbox`](../../openspec/changes/archive/2026-09-04-add-event-publishing-outbox/).
 
 ## Referências
 

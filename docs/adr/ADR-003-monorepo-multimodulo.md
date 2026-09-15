@@ -46,7 +46,7 @@ instalado carrega o placeholder literal e quebra qualquer consumidor do artefato
 sem container. `failsafe` roda `*IT.java` na fase `verify` — integração com Testcontainers.
 `mvn test` fica rápido para o ciclo curto; `mvn verify` roda tudo antes do PR.
 
-## Alternativas consideradas
+## Alternativas
 
 **Cinco repositórios independentes.**
 Descartada. É a organização correta quando times diferentes têm ciclos de release diferentes —
@@ -87,6 +87,8 @@ Com cinco módulos no mesmo reactor, seria uma indireção sem consumidor.
 ## Status
 
 Aceita. Materializada em `bootstrap-monorepo` (M00), que cria o POM pai e os cinco módulos.
+
+Origem: [`bootstrap-monorepo`](../../openspec/changes/archive/2026-09-02-bootstrap-monorepo/).
 
 ## Adendo — 2026-09-14: módulo técnico `quality-gates` (M10)
 

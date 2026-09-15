@@ -36,7 +36,7 @@ mais a trilha completa de mudanças.
 Isso configura um **CQRS-lite**: a escrita vive no agendamento, a leitura rica vive no
 histórico, e a consistência entre os dois é eventual, mediada pelo broker.
 
-## Alternativas consideradas
+## Alternativas
 
 **Dois serviços, com o histórico embutido no agendamento.**
 Descartada. Seria mais barata, mas deixaria o RabbitMQ com um consumidor só — um enfileiramento,
@@ -70,3 +70,5 @@ Descartada de saída: contraria o enunciado, que pede comunicação assíncrona 
 ## Status
 
 Aceita. Materializada em `bootstrap-monorepo` (M00), que cria os três módulos de serviço.
+
+Origem: [`bootstrap-monorepo`](../../openspec/changes/archive/2026-09-02-bootstrap-monorepo/).
