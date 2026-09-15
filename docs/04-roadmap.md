@@ -359,13 +359,14 @@ O M10 assume esse teste como trabalho próprio, não remendo:
 ### M12 · `add-docker-compose-demo`
 **Capability:** `operacao-do-ambiente` · **Fecha:** RNF-07
 
-**Escopo:** Dockerfiles multi-stage, compose final com os 5 containers + Mailpit, profile `demo` com seed, Makefile.
+**Escopo:** Dockerfiles multi-stage, Compose final com seis containers (infraestrutura, três serviços e Mailpit), profile `demo`, roteiro e Makefile.
 
 **Notas técnicas obrigatórias**
 - Multi-stage com cache de dependências; runtime `eclipse-temurin:21-jre-alpine`; **usuário não-root**; `HEALTHCHECK` no `/actuator/health`.
 - `depends_on` com `condition: service_healthy`.
-- Seed demo com **uma consulta nas próximas 24h**, senão o lembrete D-1 não tem o que pegar na apresentação.
+- O roteiro cria a consulta pela API com o token do enfermeiro e a reaproveita de forma determinística enquanto ela permanecer nas próximas 24h; gravá-la só no banco não alimentaria histórico nem notificação.
 - `notificacao.sender=smtp` apontando para o Mailpit — e-mail chegando na tela vale mais que log.
+- O indicador `mail` é reabilitado somente no Compose, onde o Mailpit é dependência operacional.
 - Validar em execução limpa: `docker compose down -v && make demo`. Só está pronto se passar do zero.
 
 ---

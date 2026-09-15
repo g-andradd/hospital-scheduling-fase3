@@ -271,12 +271,13 @@ mvn -q -pl quality-gates -am test -Dtest='LogsEstruturadosTest,RoteiroDeSmokeTes
 
 ## Executar a infraestrutura
 
-Sobe PostgreSQL 16 e RabbitMQ 3.13, que é tudo que os serviços precisam para rodar localmente.
-Os containers das três aplicações entram no M12.
+Para subir somente PostgreSQL 16 e RabbitMQ 3.13 e executar os serviços no host:
 
 ```bash
 cp .env.example .env
-docker compose up -d
+make infra
+# equivalente:
+docker compose up -d postgres rabbitmq
 ```
 
 Aguarde os dois containers ficarem `healthy`:
@@ -455,7 +456,25 @@ usuários, todos com a senha `Senha@123`:
 
 ## Executar a aplicação completa
 
-> Preenchido no M12.
+O caminho oficial da demonstração exige **Docker com Compose v2, GNU Make, Bash, curl e jq
+1.6+**. Na primeira execução, o comando cria o `.env` a partir do exemplo quando necessário,
+constrói as três imagens, espera os seis containers ficarem saudáveis e comprova o fluxo real:
+login, criação de consulta, e-mail de agendamento, histórico GraphQL e lembrete D-1.
+No Windows, use o Git for Windows instalado no caminho padrão; o Makefile seleciona o Git Bash
+explicitamente para não cair no launcher do WSL encontrado em `System32`.
+
+```bash
+make demo
+```
+
+Sem Make, estes três comandos são apenas uma conveniência operacional; a evidência oficial do
+projeto continua sendo `make demo`:
+
+```bash
+cp .env.example .env
+docker compose up -d --build --wait
+bash scripts/demo.sh
+```
 
 | Serviço | URL |
 |---|---|
@@ -463,6 +482,24 @@ usuários, todos com a senha `Senha@123`:
 | Notificações | http://localhost:8082/actuator/health |
 | Histórico (GraphiQL) | http://localhost:8083/graphiql |
 | Mailpit | http://localhost:8025 |
+| RabbitMQ Management | http://localhost:15672 |
+
+Usuários de demonstração: `medico@hospital.com`, `enfermeiro@hospital.com` e
+`paciente@hospital.com`; senha comum: `Senha@123`. O roteiro usa o enfermeiro e informa ao final
+o `consultaId`, a origem da consulta (`criada` ou `reaproveitada`) e os identificadores dos e-mails.
+
+Operação cotidiana:
+
+```bash
+make ps      # estado dos containers
+make logs    # logs agregados
+make down    # encerra, preservando os volumes
+make reset   # encerra e apaga os volumes e seus dados
+```
+
+> **Atenção:** `make reset` e qualquer `docker compose down -v` apagam os bancos e as filas do
+> ambiente local. `make demo` não remove dados e pode ser reexecutado sem duplicar a consulta de
+> demonstração enquanto ela estiver na janela das próximas 24 horas.
 
 ## Metodologia
 

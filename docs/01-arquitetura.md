@@ -63,7 +63,7 @@
 hospital-scheduling-fase3/
 ├── pom.xml                          # POM pai — dependencyManagement, plugins, ${revision}
 ├── docker-compose.yml
-├── Makefile                         # up, down, logs, demo, clean
+├── Makefile                         # demo, infra, ps, logs, down e reset
 ├── .env.example
 ├── .gitignore
 ├── README.md
@@ -72,6 +72,7 @@ hospital-scheduling-fase3/
 ├── .gitattributes                   # *.sh com fim de linha LF
 ├── scripts/
 │   ├── smoke-test.sh                # smoke ponta a ponta sem Compose: infraestrutura efêmera por RUN_ID (M10)
+│   ├── demo.sh                      # demonstração completa e reexecutável sobre o Compose (M12)
 │   └── auditoria.sh                 # confere cada RF/RNF contra sua evidência
 ├── docs/
 │   ├── 00-project-charter.md
@@ -96,6 +97,7 @@ hospital-scheduling-fase3/
 ├── shared-security/                 # filtro JWT, JwtProperties, resolver de perfil
 │   └── src/main/java/br/com/fiap/hospital/security/
 ├── agendamento-service/
+│   ├── Dockerfile                   # build multi-stage e runtime JRE não-root
 │   └── src/main/java/br/com/fiap/hospital/agendamento/
 │       ├── domain/                  # entidades, VOs, exceções, portas — ZERO Spring
 │       ├── application/             # casos de uso, DTOs de entrada/saída
@@ -105,6 +107,7 @@ hospital-scheduling-fase3/
 │           ├── messaging/           # outbox publisher, RabbitMQ config
 │           └── security/            # config do Spring Security, emissão de JWT
 ├── notificacao-service/
+│   ├── Dockerfile                   # build multi-stage e runtime JRE não-root
 │   └── src/main/java/br/com/fiap/hospital/notificacao/
 │       ├── consumer/                # listeners AMQP
 │       ├── domain/                  # Lembrete, AgendaLocal
@@ -112,6 +115,7 @@ hospital-scheduling-fase3/
 │       ├── sender/                  # porta + adaptadores Log/SMTP
 │       └── repository/
 └── historico-service/
+    ├── Dockerfile                   # build multi-stage e runtime JRE não-root
     └── src/main/java/br/com/fiap/hospital/historico/
         ├── infrastructure/messaging/   # ConsumidorTransacionalDoHistorico, ProjetorDoHistorico e HistoricoConfig
         ├── infrastructure/persistence/ # entidades e repositórios JPA
@@ -138,7 +142,14 @@ O `scripts/smoke-test.sh` **não usa Compose** nem imagens das aplicações:
 - executa os três serviços como processos `java -jar` dos `*-exec.jar`;
 - remove, ao final, somente o que criou.
 
-O Compose local e os containers `hospital-postgres` e `hospital-rabbitmq` ficam intactos.
+O Compose local reúne PostgreSQL, RabbitMQ, Mailpit e os três serviços. `make demo` constrói as
+imagens, aguarda os seis containers saudáveis e executa `scripts/demo.sh`: autentica o enfermeiro
+do seed, cria ou reaproveita pela API uma consulta marcada como `demo`, comprova os dois e-mails
+no Mailpit, a projeção GraphQL e o lembrete D-1. O SMTP usa apenas a rede interna; só a interface
+web do Mailpit é publicada em `localhost:8025`.
+
+O health de notificação inclui o indicador `mail` somente no Compose, onde Mailpit é dependência
+operacional. Fora dele, o padrão continua com canal `log` e indicador SMTP desabilitado.
 
 ## 4. agendamento-service — Clean Architecture
 
