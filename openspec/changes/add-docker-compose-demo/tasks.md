@@ -214,7 +214,18 @@ Registrar as saídas. Nenhum `down -v` nesta etapa.
   e preservou os ids dos seis containers. As imagens finais de agendamento, notificação e
   histórico não têm `mvn`, `/workspace`, arquivos `.java` ou `pom.xml`; em `/app` existe somente
   `app.jar`. Ao final, os seis containers estavam `running` e `healthy`.
-- [ ] 8.6 Clone limpo: clonar a feature branch, depois do push e com autorização do Gabriel, num diretório criado com `mktemp -d` e validado sob `${TMPDIR:-/tmp}`, com repositório Maven temporário vazio e sem `install`. Executar **somente** `mvn -q -Dmaven.repo.local=<repo> clean verify`. Registrar código 0, contagens, zero skipped e a ausência de artefato interno no repositório temporário.
+- [x] 8.6 Clone limpo: clonar a feature branch, depois do push e com autorização do Gabriel, num diretório criado com `mktemp -d` e validado sob `${TMPDIR:-/tmp}`, com repositório Maven temporário vazio e sem `install`. Executar **somente** `mvn -q -Dmaven.repo.local=<repo> clean verify`. Registrar código 0, contagens, zero skipped e a ausência de artefato interno no repositório temporário.
+
+  **Evidência executada (2026-09-15):** com autorização do Gabriel, a branch remota foi
+  clonada no SHA `8e2f909116b0c86512d4e01993dee3ecf9345652` em diretório criado por
+  `mktemp -d` e validado sob `${TMPDIR:-/tmp}`. Os oito arquivos essenciais do M12 estavam
+  presentes no clone. O repositório Maven temporário começou vazio e o único comando Maven foi
+  `mvn -q -Dmaven.repo.local=<repo> clean verify`, sem `install`; terminou com código 0.
+  Foram executados 1.610 casos em 220 relatórios, com 0 falhas, 0 erros e 0 ignorados:
+  contracts 138, security 74, agendamento 600, notificação 141, histórico 205 e
+  quality-gates 452. A guarda de infraestrutura real, a auditoria de execução e o gate de
+  cobertura ficaram APROVADOS. Nenhum artefato `br/com/fiap/hospital` ficou no repositório
+  Maven temporário, e o diretório temporário foi confirmado removido.
 - [ ] 8.7 Conferir pelo diff publicado do PR:
   - nada de M13 ou M14;
   - código de produção, `application*.yml`, migrations, seeds, contrato, schema, matrizes e o smoke inalterados;
