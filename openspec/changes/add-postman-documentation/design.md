@@ -37,7 +37,7 @@ Serão criados:
 - `postman/Hospital-Scheduling-Fase3.postman_collection.json`, schema Collection v2.1;
 - `postman/Hospital-Scheduling-Local.postman_environment.json`, com apenas URLs, credenciais públicas do profile `demo`, ids fixos do seed e variáveis derivadas vazias.
 
-Tokens, `consultaId`, horários, contador de retry e `runId` nunca terão valor inicial persistido. A collection não usa globals, data file, script externo, URL remota nem segredo diferente do seed documentado. Nomes de variável serão centralizados no environment; scripts usam `pm.environment` para que a execução no aplicativo e no Newman tenha a mesma semântica.
+Tokens, `consultaId`, horários, contador de retry e `runId` nunca terão valor inicial persistido. A collection não usa globals, data file, script externo, request para URL remota nem segredo diferente do seed documentado. A URI `info.schema` do formato v2.1 é admitida apenas como metadado e não é acessada pela jornada. Nomes de variável serão centralizados no environment; scripts usam `pm.environment` para que a execução no aplicativo e no Newman tenha a mesma semântica.
 
 **Alternativas descartadas:** collection variables para credenciais duplicariam o environment; um arquivo por serviço quebraria o encadeamento e a execução única; formato v3 excluiria o Newman 6 e não é necessário para o requisito.
 
@@ -45,11 +45,11 @@ Tokens, `consultaId`, horários, contador de retry e `runId` nunca terão valor 
 
 As pastas de primeiro nível serão exatamente as cinco do roadmap, na ordem normativa. Requests internos terão prefixos numéricos. O fluxo mínimo será:
 
-1. `00-Auth`: login de médico, enfermeiro, paciente e paciente 2; cada resposta valida `perfil`, `expiresIn`, `accessToken` e salva token próprio.
+1. `00-Auth`: antes do primeiro login, limpar todos os quatro tokens e valores derivados da execução anterior e criar o novo `runId`; depois autenticar médico, enfermeiro, paciente e paciente 2, validando `perfil`, `expiresIn`, `accessToken` e salvando token próprio.
 2. `01-Agendamento`: listar, criar consulta futura, guardar `consultaId`, buscar, alterar e confirmar usando os perfis permitidos.
 3. `02-Historico-GraphQL`: aguardar a projeção, consultar o snapshot, corrigir como médico, aguardar e comprovar a correção; disparar o lembrete manual com enfermeiro.
 4. `03-Cenarios-de-Seguranca`: 401 sem token, 403 de paciente em criação e 403 de paciente 2 ao registro do paciente 1. O corpo de segurança também é validado e não só o status.
-5. `04-Cenarios-de-Erro`: 422 no passado, 409 por sobreposição à consulta criada, 404 para UUID válido inexistente e 400 para UUID malformado, todos com Problem Detail e sem detalhe interno.
+5. `04-Cenarios-de-Erro`: 422 no passado, 409 por sobreposição à consulta criada, 404 para UUID válido inexistente e 400 para UUID malformado, todos com Problem Detail e sem detalhe interno; depois do 409, buscar a consulta original para provar que permaneceu intacta e, ao fim, cancelá-la pela API para liberar o período ativo.
 
 Cada request terá ao menos dois `pm.test()`: status/código e campos relevantes. GraphQL HTTP 200 só passa como sucesso quando `errors` está ausente; erros esperados precisam afirmar `errors[0].extensions.code`.
 
@@ -57,15 +57,15 @@ Cada request terá ao menos dois `pm.test()`: status/código e campos relevantes
 
 ### D4 — Dados dinâmicos com colisão tratada e limite
 
-No início do run, um script cria `runId` e uma base temporal futura. A criação tenta um slot de 30 minutos a partir de sete dias no futuro. Se receber o Problem Detail 409 de conflito, avança o slot em uma hora e repete o mesmo request, por no máximo 24 tentativas; qualquer outro status falha imediatamente. A resposta 201 guarda `consultaId`, horário e observação da execução.
+O pre-request do primeiro login limpa explicitamente os quatro tokens, `consultaId`, horários, observação, contadores e resultados anteriores, mesmo quando o Runner está configurado para preservar valores; em seguida cria `runId` e a base temporal futura. A criação tenta um slot de 30 minutos a partir de sete dias no futuro. Se receber o Problem Detail 409 de conflito, avança o slot em uma hora e repete o mesmo request, por no máximo 24 tentativas; qualquer outro status falha imediatamente. A resposta 201 guarda `consultaId`, horário e observação da execução.
 
-Isso torna a reexecução independente inclusive quando uma execução anterior deixou dados. O limite impede loop infinito e continua dentro do horizonte de 24 meses. O conflito intencional da pasta de erros usa exatamente o horário bem-sucedido e não participa do mecanismo de escolha.
+Isso torna a reexecução independente inclusive quando uma execução anterior deixou dados. O limite impede loop infinito e continua dentro do horizonte de 24 meses. O conflito intencional da pasta de erros usa exatamente o horário bem-sucedido e não participa do mecanismo de escolha. Depois de provar que o 409 não alterou o snapshot, a última requisição cancela a consulta da execução com motivo explícito; se uma execução falhar antes da limpeza, a busca limitada por outro slot mantém a próxima utilizável.
 
 **Alternativas descartadas:** horário aleatório só reduz, mas não elimina, colisão; apagar dados diretamente quebraria a API como fronteira; `docker compose down -v` tornaria a collection destrutiva e lenta.
 
 ### D5 — Consistência eventual tratada dentro do Runner
 
-A primeira query `consulta(id:)` pode observar `NOT_FOUND` enquanto o evento ainda está no outbox ou na fila. Seu post-response script aceita apenas esse código transitório, incrementa um contador e usa `pm.execution.setNextRequest` para repetir a própria leitura até 20 vezes. Entre tentativas, o pre-request aguarda 250 ms. No limite, o teste falha com diagnóstico. Qualquer outro erro GraphQL falha na primeira resposta.
+A primeira query `consulta(id:)` pode observar `NOT_FOUND` ou um snapshot intermediário enquanto os eventos de criação, alteração e confirmação ainda estão no outbox ou na fila. Seu post-response script incrementa um contador e usa `pm.execution.setNextRequest` para repetir a própria leitura até 20 vezes enquanto houver `NOT_FOUND` ou até o snapshot conter simultaneamente `status=CONFIRMADA` e a observação atualizada pela jornada REST. Entre tentativas, o pre-request aguarda 250 ms. No limite, o teste falha com diagnóstico. Qualquer outro erro GraphQL falha na primeira resposta.
 
 Depois da mutation de correção, a leitura posterior aplica o mesmo padrão até observar o valor corrigido. O token usado em cada operação segue as matrizes promovidas: enfermeiro lê, médico corrige.
 
@@ -83,9 +83,9 @@ O Maven não chama Docker/Newman. `mvn -q clean verify` continua um gate reprodu
 
 ### D7 — Gate estrutural sem parser ou dependência nova
 
-`ColecaoPostmanTest`, no `quality-gates`, lê os arquivos reais em UTF-8 e verifica invariantes estreitas por trechos e expressões regulares: schema v2.1; dois JSON presentes; cinco pastas exatas e ordenadas; requests com URL/body; quatro logins e quatro variáveis de token; ausência de token literal; uso dos ids do seed; presença de REST, GraphQL e lembrete; pelo menos dois `pm.test()` por request; códigos 401/403/422/409/404/400; retry limitado; valores derivados vazios; nenhuma referência externa.
+`ColecaoPostmanTest`, no `quality-gates`, lê os arquivos reais em UTF-8 e verifica invariantes estreitas por trechos e expressões regulares: schema v2.1; dois JSON presentes; cinco pastas exatas e ordenadas; todo request com URL e body apenas quando o método/operação o exige; quatro logins e quatro variáveis de token; limpeza inicial; ausência de token literal; uso dos ids do seed; presença de REST, GraphQL e lembrete; pelo menos dois `pm.test()` por request; códigos 401/403/422/409/404/400; retry limitado; valores derivados vazios; nenhum request externo, admitindo a URI normativa de `info.schema`.
 
-`DocumentacaoFinalTest` verifica os sete ADRs, seções e ordem, índice e destinos locais; no README, verifica instruções de importação/Runner, URLs, credenciais e ao menos dois blocos Mermaid com marcadores de fluxo coerentes. A validade sintática integral dos JSON e dos scripts é provada pelo Newman; o teste Java não finge ser um parser JSON ou Mermaid.
+`DocumentacaoFinalTest` verifica os sete ADRs, seções e ordem, índice e destinos locais; no README, verifica instruções de importação/Runner, URLs, credenciais, catálogo da superfície REST/GraphQL e ao menos dois blocos Mermaid, um iniciado por `flowchart` e outro por `sequenceDiagram`, com participantes e relações esperados. A validade sintática integral dos JSON e dos scripts é provada pelo Newman; o teste Java não finge ser um parser JSON ou Mermaid. A renderização visual é conferida no GitHub durante a revisão do PR, sem ser apresentada como teste automatizado.
 
 Negativos sintéticos mudam uma invariante por caso. A cobertura Scenario → método vive em uma matriz no `tasks.md`, e uma asserção exige a contagem completa para não passar vazia.
 
@@ -93,7 +93,7 @@ Negativos sintéticos mudam uma invariante por caso. A cobertura Scenario → m�
 
 ### D8 — README consolidado sem antecipar M14
 
-O README mantém a visão estrutural existente e ganha um `sequenceDiagram` do request REST à projeção/notificação. A primeira metade concentra: estado do projeto, arquitetura, início rápido com `make demo`, credenciais, URLs e como importar/rodar Postman. Seções profundas de gate, smoke e operação continuam disponíveis, mas links internos reduzem a rolagem. Todos os comandos e nomes de campo são conferidos contra arquivos reais.
+O README mantém a visão estrutural existente e ganha um `sequenceDiagram` do request REST à projeção/notificação. A primeira metade concentra: estado do projeto, arquitetura, início rápido com `make demo`, credenciais, URLs, catálogo conciso dos métodos/caminhos REST e operações GraphQL e como importar/rodar Postman. Seções profundas de gate, smoke e operação continuam disponíveis, mas links internos reduzem a rolagem. Todos os comandos, endpoints, operações e nomes de campo são conferidos contra arquivos reais.
 
 Não será criado relatório técnico, roteiro de apresentação ou status de release final; o M14 ainda fará auditoria e fechamento de `1.0.0`.
 

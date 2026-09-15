@@ -5,7 +5,7 @@ O projeto SHALL fornecer uma collection Postman e um environment local versionad
 
 #### Scenario: Collection e environment são importáveis
 - **WHEN** os dois artefatos versionados são carregados por um runner compatível com o formato Postman
-- **THEN** ambos são aceitos sem conversão manual, referência remota ou arquivo adicional
+- **THEN** ambos são aceitos sem conversão manual, arquivo adicional ou dependência de recurso remoto para executar, admitindo apenas a URI normativa de schema como metadado do formato
 
 #### Scenario: Pastas obrigatórias preservam a ordem
 - **WHEN** a collection é inspecionada
@@ -20,8 +20,8 @@ O projeto SHALL fornecer uma collection Postman e um environment local versionad
 - **THEN** os requests terminam na ordem declarada com todas as asserções aprovadas e sem edição manual, colagem de token ou entrada interativa
 
 #### Scenario: Nova execução não depende da anterior
-- **WHEN** a collection é executada novamente sem reaproveitar os valores derivados da execução anterior
-- **THEN** ela cria ou seleciona os próprios dados de trabalho e termina novamente com todas as asserções aprovadas
+- **WHEN** a collection é executada novamente, inclusive com a opção do Runner que preserva valores locais
+- **THEN** ela limpa ou sobrescreve tokens e valores derivados antes de usá-los, cria os próprios dados de trabalho e termina novamente com todas as asserções aprovadas
 
 #### Scenario: Toda requisição comprova status e contrato mínimo
 - **WHEN** qualquer request da collection recebe uma resposta
@@ -36,7 +36,7 @@ A collection SHALL demonstrar o fluxo principal de agendamento REST, a leitura e
 
 #### Scenario: Histórico projetado é lido por GraphQL
 - **WHEN** a consulta criada ainda não apareceu no read model e a pasta `02-Historico-GraphQL` é executada
-- **THEN** a collection repete a leitura dentro de um limite explícito e só prossegue quando o snapshot correspondente for encontrado, falhando se o limite terminar
+- **THEN** a collection repete a leitura dentro de um limite explícito e só prossegue quando o snapshot contém o estado final confirmado e a observação atualizada pela jornada REST, falhando se o limite terminar
 
 #### Scenario: Médico corrige o histórico e a correção é observada
 - **WHEN** o token do médico envia uma correção válida para a consulta da execução
@@ -75,11 +75,11 @@ O README SHALL ser uma porta de entrada suficiente para entender a arquitetura, 
 
 #### Scenario: Leitor encontra um caminho completo do zero
 - **WHEN** uma pessoa abre apenas o README em um clone limpo
-- **THEN** encontra pré-requisitos, comandos do ambiente, credenciais `demo`, URLs dos serviços, importação dos artefatos Postman e instruções do Runner sem depender de informação contraditória
+- **THEN** encontra pré-requisitos, comandos do ambiente, credenciais `demo`, URLs dos serviços, catálogo dos endpoints REST e operações GraphQL, importação dos artefatos Postman e instruções do Runner sem depender de informação contraditória
 
-#### Scenario: Arquitetura e sequência renderizam no GitHub
-- **WHEN** os blocos Mermaid do README são analisados e renderizados
-- **THEN** existe ao menos uma visão estrutural e uma sequência ponta a ponta coerentes com os três serviços, PostgreSQL, RabbitMQ e Mailpit
+#### Scenario: Arquitetura e sequência usam Mermaid coerente
+- **WHEN** os blocos Mermaid do README são inspecionados
+- **THEN** existe ao menos um `flowchart` estrutural e um `sequenceDiagram` ponta a ponta com os três serviços, PostgreSQL, RabbitMQ e Mailpit, usando participantes e relações verificáveis no texto
 
 #### Scenario: Links locais da documentação são válidos
 - **WHEN** os links relativos do README e do índice de ADRs são resolvidos a partir de seus arquivos
