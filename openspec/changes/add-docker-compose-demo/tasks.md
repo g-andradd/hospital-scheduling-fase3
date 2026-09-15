@@ -226,11 +226,28 @@ Registrar as saídas. Nenhum `down -v` nesta etapa.
   quality-gates 452. A guarda de infraestrutura real, a auditoria de execução e o gate de
   cobertura ficaram APROVADOS. Nenhum artefato `br/com/fiap/hospital` ficou no repositório
   Maven temporário, e o diretório temporário foi confirmado removido.
-- [ ] 8.7 Conferir pelo diff publicado do PR:
+- [x] 8.7 Conferir pelo diff publicado do PR:
   - nada de M13 ou M14;
   - código de produção, `application*.yml`, migrations, seeds, contrato, schema, matrizes e o smoke inalterados;
   - `postgres`, `rabbitmq`, volumes e `init.sql` inalterados no Compose;
   - nenhuma proteção do M10/M11 removida;
   - `CHANGELOG.md` e versão inalterados.
-- [ ] 8.8 Montar no corpo do PR a matriz dos 19 Scenarios → teste ou evidência registrada, sem Scenario sem evidência. Registrar as decisões do D5 e do D6, a autorização da validação do zero e os riscos residuais.
-- [ ] 8.9 Confirmar a prontidão para archive: todas as tasks de 1.1 a 8.8 concluídas, e `openspec status --change add-docker-compose-demo` e `openspec validate add-docker-compose-demo --strict` verdes. O archive é feito na própria feature branch, depois da aprovação do PR e antes do merge.
+
+  **Evidência publicada (PR #27, 2026-09-15):** o diff tem 18 arquivos, todos no escopo do
+  M12. Não há código de produção, `application*.yml`, migration, seed, contrato, schema,
+  matriz, `scripts/smoke-test.sh`, POM, `CHANGELOG.md` ou arquivo do M13/M14. No Compose, as
+  três remoções são somente comentários substituídos pela instrução do ambiente completo; os
+  blocos existentes de PostgreSQL e RabbitMQ, `init.sql`, rede e volumes foram preservados.
+  As guardas e demais proteções do M10/M11 não foram removidas.
+- [x] 8.8 Montar no corpo do PR a matriz dos 19 Scenarios → teste ou evidência registrada, sem Scenario sem evidência. Registrar as decisões do D5 e do D6, a autorização da validação do zero e os riscos residuais.
+
+  **Evidência publicada (PR #27, 2026-09-15):** o corpo tem a matriz completa, e os 19
+  títulos de Scenario do delta aparecem com teste ou evidência registrada, sem ausência. Também
+  registra as decisões D5 e D6, a autorização nominal da validação destrutiva, os riscos
+  residuais, o gate de 1.610 testes, a cobertura e o clone limpo.
+- [x] 8.9 Confirmar a prontidão para archive: todas as tasks de 1.1 a 8.8 concluídas, e `openspec status --change add-docker-compose-demo` e `openspec validate add-docker-compose-demo --strict` verdes. O archive é feito na própria feature branch, depois da aprovação do PR e antes do merge.
+
+  **Evidência executada (2026-09-15):** tasks 1.1 a 8.8 concluídas; OpenSpec com 4/4
+  artefatos completos e `Change 'add-docker-compose-demo' is valid`. O PR #27 está aberto,
+  mergeável e com as evidências publicadas. O archive permanece condicionado à aprovação e
+  deve ser commitado e enviado nesta mesma feature branch antes do merge.
