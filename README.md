@@ -16,6 +16,7 @@ Sistema de agendamento e histórico de consultas hospitalares, construído como 
 - [Collection Postman](#collection-postman)
 - [Arquitetura em uma frase](#arquitetura-em-uma-frase)
 - [Documentação](#documentação)
+- [Auditoria de requisitos](#auditoria-de-requisitos)
 - [Gate de qualidade, auditoria e smoke](#gate-de-qualidade-auditoria-e-smoke-m10)
 
 ## Início rápido
@@ -161,12 +162,37 @@ Java 21 · Spring Boot 3.5 · Spring Security + JWT · Spring for GraphQL · Spr
 | [Arquitetura](docs/01-arquitetura.md) | Visão geral, estrutura, Clean Architecture, segurança |
 | [Especificação Funcional](docs/02-especificacao-funcional.md) | RF/RNF rastreáveis, matriz de autorização, modelo de dados |
 | [Contrato de Eventos](docs/03-contrato-de-eventos.md) | Topologia RabbitMQ, envelope, outbox, idempotência |
+| [Relatório Técnico](docs/relatorio-tecnico.md) | Contexto, arquitetura, decisões, segurança, garantias de entrega, números e limites |
+| [Roteiro de Demonstração](docs/roteiro-demo.md) | Apresentação cronometrada de 5 a 8 minutos, com pré-demonstração fora da contagem |
 | [Roadmap](docs/04-roadmap.md) | 15 changes com escopo, notas técnicas e critérios de aceite |
 | [Fluxo de Trabalho](docs/05-fluxo-de-trabalho.md) | Ciclo OpenSpec + GitFlow, releases, convenção de commits |
 | [ADRs](docs/adr/) | Decisões arquiteturais |
 | [`openspec/config.yaml`](openspec/config.yaml) | Contexto e regras injetados em todo planejamento OpenSpec |
 | [`openspec/specs/`](openspec/specs/) | O que já está construído, por capability |
 | [`openspec/changes/`](openspec/changes/) | Propostas em andamento |
+
+## Auditoria de requisitos
+
+```bash
+bash scripts/auditoria.sh
+```
+
+Percorre os 30 requisitos de [`docs/02-especificacao-funcional.md`](docs/02-especificacao-funcional.md)
+e imprime `REQUISITO | STATUS | EVIDÊNCIA`, uma linha por requisito, com as âncoras que o
+sustentam. Termina com código diferente de zero se faltar requisito, houver identificador
+duplicado ou fora da sequência, o artefato de evidência não existir ou a âncora não for
+encontrada.
+
+É **somente leitura**: não sobe container, não alcança banco nem broker, não executa o build,
+não depende de rede e não escreve arquivo algum. Roda em qualquer clone, sem Docker e sem o
+ambiente no ar.
+
+> **Duas auditorias, propósitos distintos.** A **auditoria de requisitos** é esta: estática,
+> em Bash, sobre os RF/RNF. `OK` significa que a evidência versionada existe e está ancorada no
+> elemento declarado — **não** que o comportamento foi reexecutado agora. A **auditoria de
+> execução** é outra: roda dentro do `mvn verify`, no módulo `quality-gates`, e verifica que
+> todas as suítes do reactor executaram integralmente, sem filtro, omissão ou tolerância. Os
+> nomes são parecidos; os instrumentos não são intercambiáveis.
 
 ## Construir o projeto
 
