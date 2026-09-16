@@ -16,7 +16,7 @@ A mensagem persistente é marcada como publicada somente após ACK e ausência d
 
 Se o broker aceitar e o commit local falhar, o mesmo eventId/envelope reaparece. At-least-once é consequência aceita e exige idempotência em M06/M08. O relay restaura correlação persistida por evento e limpa/restaura o MDC anterior; nunca consulta os cadastros para reconstruir o fato.
 
-## Alternativas consideradas
+## Alternativas
 
 - Publicar diretamente no caso de uso: introduz dual write, depende da disponibilidade do broker e permite divergência entre evento e consulta.
 - Transação isolada para o outbox: quebra atomicidade com os decoradores existentes.
@@ -36,6 +36,8 @@ Rollback da aplicação preserva migrations/dados e pode desligar o relay. Volta
 ## Status
 
 Aceita no M05, incluindo a decisão de concorrência ajustada e autorizada durante o apply. Archive, commit e push do archive precedem o merge, após aprovação do PR.
+
+Origem: [`add-event-publishing-outbox`](../../openspec/changes/archive/2026-09-04-add-event-publishing-outbox/).
 
 ## Referências
 

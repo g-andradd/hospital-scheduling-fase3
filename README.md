@@ -7,6 +7,102 @@ Sistema de agendamento e histórico de consultas hospitalares, construído como 
 
 ---
 
+## Sumário
+
+- [Início rápido](#início-rápido)
+- [Credenciais de demonstração](#credenciais-de-demonstração)
+- [URLs locais](#urls-locais)
+- [Catálogo da API](#catálogo-da-api)
+- [Collection Postman](#collection-postman)
+- [Arquitetura em uma frase](#arquitetura-em-uma-frase)
+- [Documentação](#documentação)
+- [Gate de qualidade, auditoria e smoke](#gate-de-qualidade-auditoria-e-smoke-m10)
+
+## Início rápido
+
+Pré-requisitos: Docker com Compose v2, GNU Make, Bash, curl e jq 1.6 ou superior.
+O caminho oficial sobe os seis containers, espera a saúde e executa a demonstração:
+
+```bash
+make demo
+```
+
+Depois, importe a collection descrita em [Collection Postman](#collection-postman) ou explore o
+Swagger e o GraphiQL pelas URLs abaixo. `make down` encerra os containers preservando os dados;
+`make reset` também apaga os volumes.
+
+## Credenciais de demonstração
+
+Os quatro usuários existem somente com o profile `demo` e usam a senha comum `Senha@123`.
+
+| Perfil | E-mail |
+|---|---|
+| MEDICO | `medico@hospital.com` |
+| ENFERMEIRO | `enfermeiro@hospital.com` |
+| PACIENTE | `paciente@hospital.com` |
+| PACIENTE (controle de propriedade) | `paciente2@hospital.com` |
+
+## URLs locais
+
+| Serviço | URL principal |
+|---|---|
+| Agendamento / Swagger | http://localhost:8081/swagger-ui.html |
+| Notificação / health | http://localhost:8082/actuator/health |
+| Histórico / GraphiQL | http://localhost:8083/graphiql |
+| Mailpit | http://localhost:8025 |
+| RabbitMQ Management | http://localhost:15672 |
+
+## Catálogo da API
+
+Todas as operações protegidas usam `Authorization: Bearer <accessToken>`. O token é emitido pelo
+agendamento e validado pelos três serviços.
+
+| Fronteira | Operação | Finalidade |
+|---|---|---|
+| REST | POST `/auth/login` | Autenticar e obter `accessToken`, `expiresIn` e `perfil` |
+| REST | POST `/api/v1/consultas` | Criar consulta |
+| REST | GET `/api/v1/consultas` | Listar consultas com filtros e paginação |
+| REST | GET `/api/v1/consultas/{id}` | Buscar consulta |
+| REST | PUT `/api/v1/consultas/{id}` | Alterar consulta |
+| REST | PATCH `/api/v1/consultas/{id}/confirmar` | Confirmar consulta |
+| REST | PATCH `/api/v1/consultas/{id}/cancelar` | Cancelar consulta com motivo |
+| Interna | POST `/internal/lembretes/executar` | Disparar manualmente a varredura D-1 |
+| GraphQL | `consultasDoPaciente(pacienteId:, filtro:)` | Histórico por paciente |
+| GraphQL | `minhasConsultas(filtro:)` | Histórico do paciente autenticado |
+| GraphQL | `consultasDoMedico(medicoId:, filtro:)` | Histórico por médico |
+| GraphQL | `consulta(id:)` | Snapshot histórico por consulta |
+| GraphQL | `corrigirRegistroHistorico(input:)` | Correção manual auditada pelo médico |
+
+REST usa `http://localhost:8081`, o endpoint interno usa `http://localhost:8082` e GraphQL usa
+`POST http://localhost:8083/graphql`. Os endpoints operacionais ficam descritos em
+[Arquitetura verificada e observabilidade](#arquitetura-verificada-e-observabilidade-m11).
+
+## Collection Postman
+
+Importe no Postman os dois exports versionados:
+
+- [`postman/Hospital-Scheduling-Fase3.postman_collection.json`](postman/Hospital-Scheduling-Fase3.postman_collection.json);
+- [`postman/Hospital-Scheduling-Local.postman_environment.json`](postman/Hospital-Scheduling-Local.postman_environment.json).
+
+Selecione o environment **Hospital Scheduling - Local** e execute a collection inteira no
+**Collection Runner**, em ordem. Ela autentica os quatro perfis, cria e confirma uma consulta,
+aguarda a projeção, corrige o histórico, prova 401/403/400/404/409/422 e cancela a consulta criada.
+Tokens, identificadores e horários são variáveis efêmeras; nenhuma edição manual é necessária.
+
+Com o ambiente de `make demo` saudável, a mesma collection pode ser executada pelo Newman oficial:
+
+```bash
+docker run --rm \
+  --network hospital-fase3_hospital-net \
+  --mount type=bind,source="$PWD/postman",target=/etc/newman,readonly \
+  postman/newman:6.1.3-alpine run \
+  /etc/newman/Hospital-Scheduling-Fase3.postman_collection.json \
+  -e /etc/newman/Hospital-Scheduling-Local.postman_environment.json \
+  --env-var agendamentoBaseUrl=http://agendamento:8081 \
+  --env-var notificacaoBaseUrl=http://notificacao:8082 \
+  --env-var historicoBaseUrl=http://historico:8083 --bail
+```
+
 ## Status
 
 🚧 Em desenvolvimento. Acompanhe o [roadmap](docs/04-roadmap.md).
@@ -30,6 +126,27 @@ flowchart LR
     R -->|consulta.#| N
     R -->|consulta.#| H
     N --> M[Log / SMTP → Mailpit]
+```
+
+```mermaid
+sequenceDiagram
+    actor Cliente
+    participant A as agendamento-service
+    participant P as PostgreSQL / outbox
+    participant R as RabbitMQ
+    participant N as notificacao-service / Mailpit
+    participant H as historico-service / GraphQL
+
+    Cliente->>A: POST /api/v1/consultas
+    A->>P: grava consulta + evento na outbox
+    A-->>Cliente: 201 + consultaId
+    P->>R: relay publica evento
+    R->>N: consulta.criada
+    N->>N: agenda local + e-mail no Mailpit
+    R->>H: consulta.criada/atualizada/confirmada
+    H->>H: projeta snapshot e trilha
+    Cliente->>H: POST /graphql consulta(id:)
+    H-->>Cliente: snapshot histórico
 ```
 
 ## Stack

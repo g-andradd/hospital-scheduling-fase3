@@ -52,7 +52,7 @@ cadastrados. Pela mesma razão, a verificação de senha **sempre executa**, mes
 não existe: sem isso, a diferença de tempo entre "não achei o usuário" e "achei e o hash não
 bate" responde a pergunta que a mensagem se recusou a responder.
 
-## Alternativas consideradas
+## Alternativas
 
 **Sessão HTTP com cookie, o padrão do Spring Security.**
 Descartada. É a opção mais simples para um único serviço e a errada para três. Exigiria store de
@@ -115,3 +115,5 @@ Aceita. Implementada em `add-autenticacao-jwt` (M04), no módulo `shared-securit
 (`JwtService`, `JwtAuthenticationFilter`, `SegurancaAutoConfiguration`, `RespostaDeSeguranca`) e
 no `agendamento-service` (`SolicitanteAutenticado`, `AutenticarUsuarioUseCase`, `@PreAuthorize`
 no `ConsultaController`). A matriz que ela aplica está na ADR-004.
+
+Origem: [`add-autenticacao-jwt`](../../openspec/changes/archive/2026-09-04-add-autenticacao-jwt/).
