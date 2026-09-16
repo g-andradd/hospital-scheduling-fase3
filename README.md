@@ -106,7 +106,7 @@ docker run --rm \
 
 ## Status
 
-🚧 Em desenvolvimento. Acompanhe o [roadmap](docs/04-roadmap.md).
+✅ **Entregue** — versão 1.0.0. Veja o [CHANGELOG](CHANGELOG.md), o [relatório técnico](docs/relatorio-tecnico.md) e o [roteiro de demonstração](docs/roteiro-demo.md).
 
 ## Arquitetura em uma frase
 
