@@ -63,14 +63,16 @@
 hospital-scheduling-fase3/
 ├── pom.xml                          # POM pai — dependencyManagement, plugins, ${revision}
 ├── docker-compose.yml
-├── Makefile                         # up, down, logs, demo, clean
+├── Makefile                         # demo, infra, ps, logs, down e reset
 ├── .env.example
 ├── .gitignore
 ├── README.md
 ├── docker/
 │   └── postgres/init.sql            # cria os três databases
+├── .gitattributes                   # *.sh com fim de linha LF
 ├── scripts/
-│   ├── smoke-test.sh                # e2e com o compose no ar
+│   ├── smoke-test.sh                # smoke ponta a ponta sem Compose: infraestrutura efêmera por RUN_ID (M10)
+│   ├── demo.sh                      # demonstração completa e reexecutável sobre o Compose (M12)
 │   └── auditoria.sh                 # confere cada RF/RNF contra sua evidência
 ├── docs/
 │   ├── 00-project-charter.md
@@ -95,6 +97,7 @@ hospital-scheduling-fase3/
 ├── shared-security/                 # filtro JWT, JwtProperties, resolver de perfil
 │   └── src/main/java/br/com/fiap/hospital/security/
 ├── agendamento-service/
+│   ├── Dockerfile                   # build multi-stage e runtime JRE não-root
 │   └── src/main/java/br/com/fiap/hospital/agendamento/
 │       ├── domain/                  # entidades, VOs, exceções, portas — ZERO Spring
 │       ├── application/             # casos de uso, DTOs de entrada/saída
@@ -104,6 +107,7 @@ hospital-scheduling-fase3/
 │           ├── messaging/           # outbox publisher, RabbitMQ config
 │           └── security/            # config do Spring Security, emissão de JWT
 ├── notificacao-service/
+│   ├── Dockerfile                   # build multi-stage e runtime JRE não-root
 │   └── src/main/java/br/com/fiap/hospital/notificacao/
 │       ├── consumer/                # listeners AMQP
 │       ├── domain/                  # Lembrete, AgendaLocal
@@ -111,13 +115,41 @@ hospital-scheduling-fase3/
 │       ├── sender/                  # porta + adaptadores Log/SMTP
 │       └── repository/
 └── historico-service/
+    ├── Dockerfile                   # build multi-stage e runtime JRE não-root
     └── src/main/java/br/com/fiap/hospital/historico/
         ├── infrastructure/messaging/   # ConsumidorTransacionalDoHistorico, ProjetorDoHistorico e HistoricoConfig
         ├── infrastructure/persistence/ # entidades e repositórios JPA
         ├── infrastructure/leitura/     # ConsultasDoHistorico: predicados do filtro no armazenamento
         ├── infrastructure/correcao/    # CorrecaoDeRegistroHistorico: correção atômica com auditoria
         └── infrastructure/graphql/     # resolvers, schema.graphqls, escalar DateTime e os dois caminhos de erro
+└── quality-gates/                   # módulo técnico (M10), sem aplicação e sem Spring, construído por último
+    └── src/main/java/br/com/fiap/hospital/qualidade/
+                                     # relatório agregado JaCoCo, auditoria de execução, gate de cobertura
 ```
+
+O reactor tem **sete projetos Maven**:
+- a raiz;
+- os cinco módulos de código;
+- o `quality-gates`, sexto módulo filho, com os cinco módulos de código como dependências
+  internas em escopo `compile`.
+
+Na fase `verify`, o `quality-gates` roda o relatório agregado, a auditoria de execução e o gate
+de cobertura, nessa ordem. Os testes dele verificam a topologia do reactor, a exclusão de
+cobertura, a infraestrutura real dos ITs e o roteiro de smoke.
+
+O `scripts/smoke-test.sh` **não usa Compose** nem imagens das aplicações:
+- sobe PostgreSQL 16 e RabbitMQ 3.13 efêmeros, identificados pelo `RUN_ID`;
+- executa os três serviços como processos `java -jar` dos `*-exec.jar`;
+- remove, ao final, somente o que criou.
+
+O Compose local reúne PostgreSQL, RabbitMQ, Mailpit e os três serviços. `make demo` constrói as
+imagens, aguarda os seis containers saudáveis e executa `scripts/demo.sh`: autentica o enfermeiro
+do seed, cria ou reaproveita pela API uma consulta marcada como `demo`, comprova os dois e-mails
+no Mailpit, a projeção GraphQL e o lembrete D-1. O SMTP usa apenas a rede interna; só a interface
+web do Mailpit é publicada em `localhost:8025`.
+
+O health de notificação inclui o indicador `mail` somente no Compose, onde Mailpit é dependência
+operacional. Fora dele, o padrão continua com canal `log` e indicador SMTP desabilitado.
 
 ## 4. agendamento-service — Clean Architecture
 
@@ -362,7 +394,7 @@ Cadeia de filtros: `SecurityFilterChain` stateless, CSRF desabilitado (API), `/a
 }
 ```
 
-Mapa de exceções: `AgendamentoNoPassado` → 422, `AgendamentoForaDoHorizonte` → 422, `DateTimeException` → 400, `ConflitoDeAgenda` → 409, `RecursoNaoEncontrado` → 404, `TransicaoDeStatusInvalida` → 409, `MotivoDeCancelamentoObrigatorio` → 422, `AlteracaoConcorrente` → 409, `CredencialInvalida` → 401, `AcessoNegado` → 403, `IllegalArgumentException` → 400, `MethodArgumentNotValid` → 400, `AccessDenied` (Spring Security) → 403, `AuthenticationException` → 401.
+Mapa de exceções: `AgendamentoNoPassado` → 422, `AgendamentoForaDoHorizonte` → 422 (início **e** fim do período, que não pode ultrapassar o horizonte), `DateTimeException` → 400, `ConflitoDeAgenda` → 409, `RecursoNaoEncontrado` → 404, `TransicaoDeStatusInvalida` → 409, `MotivoDeCancelamentoObrigatorio` → 422, `TextoComCaractereInvalido` → 422, `AlteracaoConcorrente` → 409, `CredencialInvalida` → 401, `AcessoNegado` → 403, `IllegalArgumentException` → 400 (inclui limite de intervalo fora da faixa temporal suportada), `MethodArgumentNotValid` → 400, `HttpMessageConversionException` na leitura do corpo → 400, `AccessDenied` (Spring Security) → 403, `AuthenticationException` → 401.
 
 As recusas de segurança têm `type` próprio e distinto entre si:
 
@@ -387,9 +419,9 @@ Os dois **409** têm `type` distinto, e a distinção não é cosmética. `confl
 
 ## 9. Observabilidade
 
-- `correlationId` gerado no filtro de entrada (ou lido do header `X-Correlation-Id`), colocado no MDC, propagado no header da mensagem AMQP e restaurado no MDC do consumidor. Rastreia um fluxo ponta a ponta nos três logs.
-- Actuator com `health`, `info`, `metrics` expostos.
-- Log em JSON no profile `docker`.
+- `correlationId` gerado no filtro de entrada dos três serviços (ou lido do header `X-Correlation-Id` não vazio), colocado no atributo da requisição, no header da resposta e no MDC, antes da cadeia de segurança — 401 e 403 levam o mesmo id. O agendamento o grava no outbox e no header `x-correlation-id` da mensagem; os consumidores da notificação e do histórico o colocam no MDC durante cada tentativa e fazem `MDC.clear()` ao final. Rastreia um fluxo ponta a ponta nos três logs: "Evento publicado" no relay, "Evento projetado" no histórico e a linha do `LogNotificationSender`. Os dois logs de sucesso saem antes do commit e registram a tentativa, não o efeito confirmado, que continua sendo o estado persistido.
+- Actuator com exatamente `health`, `info`, `metrics` e `prometheus` expostos, na mesma cadeia de segurança compartilhada. `health` e subcaminhos são públicos, sem detalhes; `/actuator`, `info`, `metrics` e `prometheus` exigem JWT válido de qualquer perfil; qualquer outro caminho de actuator é negado, mesmo com token. O `health` do agendamento não inclui o RabbitMQ (ADR-006) e o da notificação não inclui SMTP, cujo canal padrão é o log.
+- Log em JSON no profile `docker`, no formato `logstash` nativo do Spring Boot (`logging.structured.format.console` em `application-docker.yml`): `@timestamp`, `level`, `logger_name`, `message`, `service` e cada chave do MDC como campo próprio, como `correlationId`. Sem o profile, o log é textual.
 
 ## 10. Convenções de código e teste
 
@@ -401,6 +433,7 @@ Estas convenções são injetadas em toda requisição de planejamento pelo `con
 |---|---|
 | Pacote raiz `br.com.fiap.hospital` | Namespace único do projeto |
 | Clean Architecture **apenas** no `agendamento-service` | É onde as regras vivem. Nos outros dois seria boilerplate sem retorno — eles são adaptadores de evento |
+| Fronteiras do agendamento verificadas pelo `ArquiteturaDoAgendamentoTest` (ArchUnit, M11) | Direção `domain ← application ← infrastructure`; domínio sem Spring, JPA, Jackson ou Validation; um único método público `executar` por `*UseCase`; `@Entity` só em `infrastructure.persistence`; controllers sem repositório, porta de saída, mensageria ou caso de uso nu; nenhum acesso à saída padrão. A única exceção é nominal: o `JwtService` no `AutenticacaoController`, porque a emissão do token é da fronteira HTTP (§7) |
 | Records para DTOs | Imutabilidade e menos ruído |
 | Mapeamento domínio ↔ entidade **manual** | Sem MapStruct: a banca lê o código, e mapeamento gerado esconde o que está acontecendo |
 | `Clock` injetado, nunca `LocalDateTime.now()` | Sem isso não há como testar as regras de janela temporal (conflito de agenda, lembrete D-1) de forma determinística |
@@ -414,7 +447,10 @@ Estas convenções são injetadas em toda requisição de planejamento pelo `con
 |---|---|
 | `*Test.java` no surefire, `*IT.java` no failsafe | `mvn test` fica rápido no ciclo curto; `mvn verify` roda tudo antes do PR |
 | Infraestrutura real via Testcontainers | Mockar broker e banco esconde exatamente os erros que importam aqui: transação, idempotência, DLQ, índice |
-| Cobertura ≥ 85% global, ≥ 90% em `domain` e `application` | Gate no build, não meta aspiracional |
+| Cobertura ≥ 85% global, ≥ 90% em `domain` e `application` | Gate no build, não meta aspiracional. A partir do M10 é regra efetiva: o `quality-gates` mede linhas no relatório agregado dos cinco módulos e reprova `mvn -q clean verify` abaixo do piso |
+| Gate global sem filtro de teste | A auditoria de execução recusa seleção, exclusão, omissão e tolerância — por parâmetro, pelos POMs ou no código de teste —, e o gate só aceita evidência da sessão corrente. A garantia é por suíte e família de relatórios, não por método |
+| Infraestrutura real verificada | O `InfraestruturaRealTest` recusa dublê de banco ou broker, banco em memória e imagem fora da versão adotada, e cada módulo prova em runtime, num `InfraestruturaReal*IT`, só a infraestrutura que usa |
+| Exemplar do contrato em cópia única | `evento-consulta.json` vive só no `shared-contracts` e chega aos serviços por test-jar; produtor e consumidores o exercitam pelo broker real |
 | Um teste de integração por célula da matriz de autorização | É o item de segurança que a banca consegue verificar objetivamente |
 
 ### Cortes conscientes

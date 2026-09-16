@@ -21,7 +21,7 @@
         <dependency>
             <groupId>br.com.fiap.hospital</groupId>
             <artifactId>shared-contracts</artifactId>
-            <version>${revision}</version>
+            <version>${project.version}</version>
         </dependency>
         <!--
             O M09 traz a seguranca compartilhada porque agora existe endpoint a proteger.
@@ -31,13 +31,23 @@
         <dependency>
             <groupId>br.com.fiap.hospital</groupId>
             <artifactId>shared-security</artifactId>
-            <version>${revision}</version>
+            <version>${project.version}</version>
         </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
+        <!-- Endpoints operacionais do M11: exposicao exata e protecao na cadeia compartilhada. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
@@ -92,6 +102,16 @@
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Exemplar canonico do contrato de eventos, a mesma copia do produtor. -->
+        <dependency>
+            <groupId>br.com.fiap.hospital</groupId>
+            <artifactId>shared-contracts</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <classifier>tests</classifier>
             <scope>test</scope>
         </dependency>
     </dependencies>

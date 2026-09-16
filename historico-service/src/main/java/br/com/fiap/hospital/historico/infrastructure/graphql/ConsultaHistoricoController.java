@@ -40,6 +40,7 @@ public class ConsultaHistoricoController {
     @PreAuthorize("hasAnyRole('MEDICO', 'ENFERMEIRO', 'PACIENTE')")
     public List<ConsultaHistoricoEntity> consultasDoPaciente(
             @Argument UUID pacienteId, @Argument FiltroConsulta filtro) {
+        IdentificadorDoHistorico.exigir(pacienteId, "pacienteId");
         autorizacao.exigirAcessoAoPaciente(pacienteId);
         return consultas.doPaciente(pacienteId, filtro);
     }
@@ -60,12 +61,14 @@ public class ConsultaHistoricoController {
     @PreAuthorize("hasAnyRole('MEDICO', 'ENFERMEIRO')")
     public List<ConsultaHistoricoEntity> consultasDoMedico(
             @Argument UUID medicoId, @Argument FiltroConsulta filtro) {
+        IdentificadorDoHistorico.exigir(medicoId, "medicoId");
         return consultas.doMedico(medicoId, filtro);
     }
 
     @QueryMapping
     @PreAuthorize("hasAnyRole('MEDICO', 'ENFERMEIRO', 'PACIENTE')")
     public ConsultaHistoricoEntity consulta(@Argument UUID id) {
+        IdentificadorDoHistorico.exigir(id, "id");
         ConsultaHistoricoEntity registro = consultas.porId(id)
                 .orElseThrow(() -> new ExcecoesDoHistorico.RegistroNaoEncontrado(
                         "Consulta nao encontrada no historico."));

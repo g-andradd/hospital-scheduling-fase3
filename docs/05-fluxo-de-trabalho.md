@@ -130,8 +130,8 @@ git checkout -b release/0.1.0
 # 2. estabilizar — só correção, versão e documentação. Nenhuma funcionalidade nova.
 #    - subir <revision> no POM pai para 0.1.0
 #    - atualizar CHANGELOG.md
-#    - rodar mvn -q clean verify na raiz, sem teste ignorado
-#    - rodar scripts/smoke-test.sh, a partir da release em que o M10 ja o tiver entregue
+#    - rodar mvn -q clean verify na raiz, sem filtro e sem teste ignorado (gate global do M10)
+#    - rodar scripts/smoke-test.sh, a partir da 1.0.0: codigo 0 e nenhum recurso orfao
 #    - conferir que openspec/changes/ nao tem change ativa e changes/archive/ tem as da release
 
 git commit -am "chore(release): prepara versão 0.1.0"
@@ -154,7 +154,11 @@ git branch -d release/0.1.0
 
 **Regra da branch de release:** entra correção de bug, ajuste de versão e documentação. Não entra funcionalidade. Se aparecer funcionalidade faltando, ela vira uma feature em `develop` e entra na próxima release.
 
-**Gate de fechamento:** a verificação exigida é a que já existe na release. Na `0.1.0` e na `0.2.0`, o gate é `mvn -q clean verify` na raiz, com todas as suítes executadas e nenhum teste ignorado — `scripts/smoke-test.sh` ainda não existe, e só é criado pelo M10. Depois de entregue pelo M10, o smoke test passa a integrar o fechamento de toda release seguinte, a partir da `1.0.0`, junto com o `mvn -q clean verify`.
+**Gate de fechamento:** a verificação exigida é a que já existe na release. Na `0.1.0` e na `0.2.0`, o gate foi `mvn -q clean verify` na raiz, com todas as suítes executadas e nenhum teste ignorado; o smoke ainda não existia.
+
+O M10 entregou os dois instrumentos, e **a partir da `1.0.0`** toda release fecha com ambos:
+- **`mvn -q clean verify`** na raiz, sem `-Dtest`, `-Dit.test` ou filtro equivalente. O `quality-gates` aplica, nessa ordem, o relatório agregado, a auditoria de execução e os pisos de cobertura de 85% global e 90% em `domain` e `application`. A auditoria reprova seleção, omissão ou tolerância e evidência de outra sessão.
+- **`scripts/smoke-test.sh`**, com código 0 e nenhum recurso órfão. Ele sobe infraestrutura efêmera própria e não usa o Compose local.
 
 ---
 
@@ -199,8 +203,9 @@ Uma change só é arquivada quando:
 
 1. Todas as tasks de `tasks.md` estão marcadas `[x]`
 2. Todo `#### Scenario:` da spec delta tem evidência. Para capabilities de **comportamento**, a evidência é um teste automatizado. Para Scenarios de **build e infraestrutura**, um comando executado com a saída registrada no corpo do PR é aceito — o `scripts/smoke-test.sh` do M10 absorve esses comandos depois. Não existe comando de verificação nesta versão do OpenSpec: a conferência é manual, na revisão do PR
-3. `mvn -q clean verify` passa na raiz, sem teste ignorado
-4. Cobertura do módulo tocado ≥ 80%, **a partir do M01** — o M00 não entrega comportamento e não tem código elegível; global ≥ 85% com gate de build a partir do M10
+3. `mvn -q clean verify` passa na raiz, sem teste ignorado e sem filtro de teste. A partir do M10, esse comando é o gate global: a auditoria de execução do `quality-gates` reprova seleção, exclusão, omissão, tolerância e evidência fora da sessão corrente
+4. Cobertura do módulo tocado ≥ 80%, **a partir do M01** — o M00 não entrega comportamento e não tem código elegível. A partir do M10, o gate de build exige global ≥ 85% e ≥ 90% em `domain` e `application`, por linhas no relatório agregado
+5. A partir do M10, `scripts/smoke-test.sh` termina com código 0 e sem recurso órfão quando a change toca o fluxo principal, a infraestrutura ou o build dos serviços
 5. ArchUnit verde no `agendamento-service`
 6. Documentação afetada atualizada no mesmo PR (README, ADR, Postman)
 7. `/opsx:archive` executado na feature branch após a aprovação do PR, **e o commit do archive empurrado antes do merge**. O diff do PR tem de mostrar `openspec/changes/<id>/` movida para `changes/archive/` e a spec promovida em `openspec/specs/<capability>/`

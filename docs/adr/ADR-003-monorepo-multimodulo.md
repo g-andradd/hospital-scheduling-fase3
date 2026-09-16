@@ -46,7 +46,7 @@ instalado carrega o placeholder literal e quebra qualquer consumidor do artefato
 sem container. `failsafe` roda `*IT.java` na fase `verify` — integração com Testcontainers.
 `mvn test` fica rápido para o ciclo curto; `mvn verify` roda tudo antes do PR.
 
-## Alternativas consideradas
+## Alternativas
 
 **Cinco repositórios independentes.**
 Descartada. É a organização correta quando times diferentes têm ciclos de release diferentes —
@@ -87,3 +87,42 @@ Com cinco módulos no mesmo reactor, seria uma indireção sem consumidor.
 ## Status
 
 Aceita. Materializada em `bootstrap-monorepo` (M00), que cria o POM pai e os cinco módulos.
+
+Origem: [`bootstrap-monorepo`](../../openspec/changes/archive/2026-09-02-bootstrap-monorepo/).
+
+## Adendo — 2026-09-14: módulo técnico `quality-gates` (M10)
+
+**O que muda.** O reactor passa de seis para **sete projetos Maven**: a raiz, os cinco módulos
+de código e o `quality-gates`. Ele é o **sexto módulo filho** e o **sétimo projeto do reactor**.
+O módulo é estritamente técnico:
+- não tem aplicação, Spring nem domínio, e o código principal usa só o JDK;
+- nenhum módulo de código depende dele;
+- as cinco dependências internas estão em escopo `compile`, sem transitivos, e bibliotecas
+  externas só entram nos testes do próprio módulo.
+
+As dependências entre módulos do reactor passam a usar `${project.version}`. O
+`flatten-maven-plugin` resolve as dependências (`pomElements/dependencies=resolve`), para que
+nenhum POM publicado carregue placeholder literal.
+
+**O que ele faz.** Na fase `verify`, depois dos cinco módulos:
+1. gera o relatório JaCoCo agregado;
+2. roda a auditoria de execução das suítes;
+3. aplica o gate de cobertura — 85% global e 90% em `domain` e `application`, por linhas.
+
+O comando é `mvn -q clean verify` na raiz.
+
+**Por que um módulo, e não outra posição:**
+- **Agregar exige depender de todos.** O `report-aggregate` enxerga classes, fontes e dados de
+  execução só das dependências do módulo que o executa, e em escopo diferente de `test`. A raiz,
+  de `packaging` `pom`, roda antes dos módulos. Um serviço funcional precisaria de dependências
+  falsas sobre os outros.
+- **A ordem vem da dependência, não do texto.** Depender dos cinco módulos põe o `quality-gates`
+  por último no reactor. A posição em `<modules>` não garantiria nada.
+- **Gate separado do código avaliado.** Verificadores de cobertura, de auditoria e de
+  infraestrutura real ficam fora dos serviços. Assim não acoplam nem incham o classpath de
+  produção, e as regras do próprio módulo são testadas com POMs e fontes sintéticos.
+
+**Custo aceito.** A spec do build deixa de dizer "cinco módulos": continuam cinco módulos de
+código, mais um técnico. Isso foi aprovado como alteração deliberada da topologia na change
+`add-integration-tests-coverage`. Não se cria um ADR novo, porque a decisão de monorepo Maven
+multi-módulo permanece a mesma.

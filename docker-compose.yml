@@ -1,7 +1,7 @@
-# Infraestrutura de apoio do monorepo: Postgres e RabbitMQ.
-# Os containers dos tres servicos entram no M12 (add-docker-compose-demo).
+# Ambiente completo do monorepo: Postgres, RabbitMQ e os tres servicos.
+# Para subir somente a infraestrutura: docker compose up -d postgres rabbitmq
 #
-# Uso:  cp .env.example .env && docker compose up -d
+# Uso completo: cp .env.example .env && docker compose up -d --build --wait
 
 name: hospital-fase3
 
@@ -48,6 +48,105 @@ services:
       timeout: 10s
       retries: 10
       start_period: 20s
+    networks:
+      - hospital-net
+
+  mailpit:
+    image: axllent/mailpit:v1.31.1
+    container_name: hospital-mailpit
+    restart: unless-stopped
+    ports:
+      - "8025:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    networks:
+      - hospital-net
+
+  agendamento:
+    build:
+      context: .
+      dockerfile: agendamento-service/Dockerfile
+    container_name: hospital-agendamento
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      AGENDAMENTO_DB_URL: jdbc:postgresql://postgres:5432/agendamento_db
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET no .env}
+      SPRING_PROFILES_ACTIVE: demo,docker
+    ports:
+      - "8081:8081"
+    networks:
+      - hospital-net
+
+  notificacao:
+    build:
+      context: .
+      dockerfile: notificacao-service/Dockerfile
+    container_name: hospital-notificacao
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+    environment:
+      NOTIFICACAO_DB_URL: jdbc:postgresql://postgres:5432/notificacao_db
+      NOTIFICACAO_DB_USER: ${POSTGRES_USER}
+      NOTIFICACAO_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      NOTIFICACAO_SENDER: smtp
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      MANAGEMENT_HEALTH_MAIL_ENABLED: "true"
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET no .env}
+      SPRING_PROFILES_ACTIVE: demo,docker
+    ports:
+      - "8082:8082"
+    networks:
+      - hospital-net
+
+  historico:
+    build:
+      context: .
+      dockerfile: historico-service/Dockerfile
+    container_name: hospital-historico
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      HISTORICO_DB_URL: jdbc:postgresql://postgres:5432/historico_db
+      HISTORICO_DB_USER: ${POSTGRES_USER}
+      HISTORICO_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET no .env}
+      SPRING_PROFILES_ACTIVE: demo,docker
+    ports:
+      - "8083:8083"
     networks:
       - hospital-net
 

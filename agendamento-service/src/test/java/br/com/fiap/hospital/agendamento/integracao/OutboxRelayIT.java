@@ -119,4 +119,27 @@ class OutboxRelayIT extends M05RabbitBase {
             assertThat(recebidos).containsExactlyInAnyOrderElementsOf(antes);
         } finally {MDC.clear();}
     }
+    @Test @DisplayName("Evento publicado é registrado com a correlação do envelope, e o MDC anterior volta")
+    void registroDePublicacaoLevaACorrelacaoDoEnvelope() {
+        var logger=(ch.qos.logback.classic.Logger)org.slf4j.LoggerFactory.getLogger(br.com.fiap.hospital.agendamento.infrastructure.messaging.OutboxRelay.class);
+        var registros=new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+        var nivelAnterior=logger.getLevel();
+        logger.setLevel(ch.qos.logback.classic.Level.INFO);registros.start();logger.addAppender(registros);
+        try {
+            MDC.put("correlationId","request-publicacao");criar();
+            var e=eventos().getFirst();
+            MDC.put("correlationId","contexto-relay");
+            assertThat(relay.executar()).isEqualTo(1);
+            publicado(true);
+            assertThat(MDC.get("correlationId")).isEqualTo("contexto-relay");
+            assertThat(registros.list).filteredOn(r->r.getFormattedMessage().startsWith("Evento publicado")).singleElement().satisfies(r->{
+                assertThat(r.getLevel()).isEqualTo(ch.qos.logback.classic.Level.INFO);
+                assertThat(r.getFormattedMessage()).isEqualTo("Evento publicado eventId="+e.eventId()+" tipo="+e.eventType()+" consultaId="+e.aggregateId());
+                assertThat(r.getMDCPropertyMap()).containsEntry("correlationId","request-publicacao");
+            });
+            receber(N);receber(H);
+        } finally {
+            logger.detachAppender(registros);registros.stop();logger.setLevel(nivelAnterior);MDC.clear();
+        }
+    }
 }

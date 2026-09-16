@@ -22,7 +22,7 @@ O **agendamento** decide. Ele responde perguntas que só existem por causa das r
 
 A regra do agendamento não fica na disciplina de quem escreve: uma suíte ArchUnit a verifica no build (M11), com regras para a direção das dependências, para os imports proibidos no `domain`, para o método público único dos casos de uso e para a proibição de controller injetar repositório.
 
-## Alternativas consideradas
+## Alternativas
 
 **Clean Architecture nos três serviços.**
 Descartada. Nos serviços satélites, o resultado previsível é uma porta por adaptador e um caso de uso que só repassa a chamada — indireção que não protege nenhuma regra, porque não há regra a proteger. O custo real não é digitar as classes, é a leitura: quem abre o `notificacao-service` para entender como o lembrete D-1 funciona teria de atravessar três camadas para chegar a uma query e um envio de e-mail. Consistência aplicada onde não há o problema que o padrão resolve produz cerimônia, não qualidade.
@@ -49,4 +49,10 @@ Descartada. O compilador passaria a impedir a violação da regra de dependênci
 
 ## Status
 
-Aceita. Materializada em `add-agendamento-domain` (M01), que cria `domain` e `application` sem nenhuma dependência de framework. A verificação automática por ArchUnit é do M11.
+Aceita. Materializada em `add-agendamento-domain` (M01), que cria `domain` e `application` sem nenhuma dependência de framework.
+
+Origem: [`add-agendamento-domain`](../../openspec/changes/archive/2026-09-02-add-agendamento-domain/).
+
+Verificada automaticamente desde `add-archunit-observability` (M11): o `ArquiteturaDoAgendamentoTest` roda no build do `agendamento-service`, sobre o código principal compilado, as regras de direção das camadas (inclusive `application` sem `infrastructure`), domínio sem framework, método público único `executar` por caso de uso, entidades JPA só em `infrastructure.persistence`, controllers só com os casos de uso transacionais e ausência de saída padrão. Cada regra tem negativo sintético que prova a recusa.
+
+**Reconciliação com a nota "controller não injeta repositório".** A nota é mantida: nenhum controller depende de repositório, porta de saída, mensageria ou caso de uso sem demarcação transacional. O `AutenticacaoController` depende também do `JwtService`, que não é repositório nem caso de uso — é o emissor de token que a arquitetura põe na fronteira HTTP. Esconder a emissão atrás de um caso de uso levaria o JWT, detalhe de transporte, para dentro de `application`. Por isso a regra admite essa única exceção, nominal: uma classe e um tipo, sem exceção genérica por pacote ou anotação.

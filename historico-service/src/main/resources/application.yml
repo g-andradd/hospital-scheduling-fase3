@@ -60,6 +60,24 @@ hospital:
       # /graphql exige token em qualquer profile; o perfil e decidido no resolver.
       autenticados: /api/**,/graphql
 
+management:
+  endpoints:
+    web:
+      exposure:
+        # Allowlist exata. env, beans e o curinga nunca entram: expoem configuracao e a
+        # composicao interna. health e publico; os demais exigem token na cadeia compartilhada.
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+  prometheus:
+    metrics:
+      export:
+        # Explicito: o padrao ja e true, mas o @SpringBootTest desliga a exportacao de metricas
+        # por omissao, e sem isto o endpoint prometheus nao existiria nos testes de integracao.
+        enabled: true
+
 server:
   port: 8083
 

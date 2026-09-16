@@ -32,6 +32,14 @@ spring:
     username: ${POSTGRES_USER:hospital}
     password: ${POSTGRES_PASSWORD:hospital}
 
+  jackson:
+    parser:
+      # Chave repetida no corpo e requisicao ambigua: o ultimo valor vence em silencio,
+      # e o cliente nao fica sabendo qual dos dois foi usado. Sem esta deteccao, o
+      # corpo era aceito em alguns endpoints e, em outros, estourava na conversao e
+      # virava 500. Com ela, a recusa e sempre 400, em todos os corpos.
+      strict-duplicate-detection: true
+
   jpa:
     # O Flyway cria o schema; o Hibernate apenas confere. `validate` recusa subir
     # quando o mapeamento diverge do banco, em vez de descobrir a divergencia na
@@ -72,6 +80,29 @@ springdoc:
     path: /v3/api-docs
   swagger-ui:
     path: /swagger-ui.html
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Allowlist exata. env, beans e o curinga nunca entram: expoem configuracao e a
+        # composicao interna. health e publico; os demais exigem token na cadeia compartilhada.
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+  prometheus:
+    metrics:
+      export:
+        # Explicito: o padrao ja e true, mas o @SpringBootTest desliga a exportacao de metricas
+        # por omissao, e sem isto o endpoint prometheus nao existiria nos testes de integracao.
+        enabled: true
+  health:
+    rabbit:
+      # ADR-006: broker indisponivel nao torna a API indisponivel; consulta e outbox sao
+      # confirmados no PostgreSQL, que continua contribuindo para o health (D5).
+      enabled: false
 
 server:
   port: 8081

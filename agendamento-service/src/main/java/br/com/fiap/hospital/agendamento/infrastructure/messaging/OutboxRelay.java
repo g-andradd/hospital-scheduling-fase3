@@ -1,5 +1,7 @@
 package br.com.fiap.hospital.agendamento.infrastructure.messaging;
 
+import br.com.fiap.hospital.contracts.ConsultaPayload;
+import br.com.fiap.hospital.contracts.EventoEnvelope;
 import br.com.fiap.hospital.contracts.EventoEnvelopeConverter;
 import br.com.fiap.hospital.contracts.EventoJson;
 import br.com.fiap.hospital.contracts.MensagemInvalidaException;
@@ -46,8 +48,14 @@ public class OutboxRelay {
             String anterior = MDC.get("correlationId");
             try {
                 // Escritas fora do catch de AMQP: erro de banco aborta a transação.
-                if (publicar(pendente)) {
+                var publicado = publicar(pendente);
+                if (publicado != null) {
                     outbox.publicado(pendente.id(), OffsetDateTime.now(clock));
+                    // Antes do commit do lote: registra a tentativa bem-sucedida ate aqui, e nao
+                    // prova o efeito. Falha de commit deixa o evento pendente e o republica com
+                    // novo registro; a prova continua sendo a marca de publicacao no outbox.
+                    log.info("Evento publicado eventId={} tipo={} consultaId={}",
+                            publicado.eventId(), publicado.eventType(), publicado.aggregateId());
                 } else {
                     outbox.falhou(pendente.id());
                     log.warn("Publicacao pendente eventId={} tipo={} tentativas={}",
@@ -62,7 +70,8 @@ public class OutboxRelay {
         return lote.size();
     }
 
-    private boolean publicar(OutboxRepository.Pendente pendente) {
+    /** O evento confirmado pelo broker, ou {@code null} quando a publicacao nao foi confirmada. */
+    private EventoEnvelope<ConsultaPayload> publicar(OutboxRepository.Pendente pendente) {
         try {
             var evento = json.ler(pendente.json());
             MDC.put("correlationId", evento.correlationId());
@@ -76,9 +85,9 @@ public class OutboxRelay {
             rabbit.send(MensageriaAutoConfiguration.EXCHANGE,
                     pendente.routingKey(), mensagem, confirmacao);
             var ack = confirmacao.getFuture().get(5, TimeUnit.SECONDS);
-            return ack.isAck() && confirmacao.getReturned() == null;
+            return ack.isAck() && confirmacao.getReturned() == null ? evento : null;
         } catch (AmqpException | TimeoutException | ExecutionException e) {
-            return false;
+            return null;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             // Desfaz o lote local; entregas já aceitas pelo broker podem reaparecer.

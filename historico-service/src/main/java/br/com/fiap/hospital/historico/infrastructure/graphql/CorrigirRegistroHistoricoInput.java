@@ -48,13 +48,13 @@ public record CorrigirRegistroHistoricoInput(
     static CorrigirRegistroHistoricoInput de(Map<String, Object> bruto) {
         return new CorrigirRegistroHistoricoInput(
                 bruto.get("consultaId") == null ? null : UUID.fromString(texto(bruto, "consultaId")),
-                texto(bruto, "justificativa"),
-                texto(bruto, PACIENTE_NOME),
-                texto(bruto, MEDICO_NOME),
-                texto(bruto, ESPECIALIDADE),
+                TextoDaCorrecao.representavel(texto(bruto, "justificativa"), "justificativa"),
+                TextoDaCorrecao.nome(texto(bruto, PACIENTE_NOME), PACIENTE_NOME),
+                TextoDaCorrecao.nome(texto(bruto, MEDICO_NOME), MEDICO_NOME),
+                TextoDaCorrecao.nome(texto(bruto, ESPECIALIDADE), ESPECIALIDADE),
                 (OffsetDateTime) bruto.get(DATA_HORA),
                 texto(bruto, STATUS),
-                texto(bruto, OBSERVACOES),
+                TextoDaCorrecao.representavel(texto(bruto, OBSERVACOES), OBSERVACOES),
                 bruto.keySet());
     }
 

@@ -52,4 +52,35 @@
         </dependency>
     </dependencies>
 
+    <build>
+        <plugins>
+            <!--
+                Publica o exemplar canonico do contrato como artefato de testes, para que
+                produtor e consumidores exercitem a MESMA copia, sem duplica-la.
+
+                O include restringe o jar ao JSON: as classes de teste deste modulo
+                (EntradasAmqp, RabbitITBase) sao auxiliares internos e nao viram API
+                compartilhada. Dependencias de escopo test nao sao transitivas pelo
+                test-jar, entao cada servico continua declarando as proprias.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>fixture-de-contrato</id>
+                        <goals>
+                            <goal>test-jar</goal>
+                        </goals>
+                        <configuration>
+                            <includes>
+                                <include>evento-consulta.json</include>
+                            </includes>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
 </project>

@@ -66,6 +66,22 @@ public class SegurancaAutoConfiguration {
     };
 
     /**
+     * Endpoints operacionais que exigem token de qualquer perfil.
+     *
+     * <p>Lista exata, e nao {@code /actuator/**}: um {@code env} exposto por engano ficaria
+     * alcancavel com qualquer token. Assim, qualquer outro caminho de actuator continua no
+     * {@code denyAll}, mesmo que a exposicao seja ampliada — defesa em profundidade. O
+     * {@code health} segue em {@link #PUBLICOS}.
+     */
+    static final String[] OPERACIONAIS_AUTENTICADOS = {
+        "/actuator",
+        "/actuator/info",
+        "/actuator/metrics",
+        "/actuator/metrics/**",
+        "/actuator/prometheus"
+    };
+
+    /**
      * O despacho de erro do container, que <b>precisa</b> passar.
      *
      * <p>Excecao lancada dentro de um filtro escapa do {@code DispatcherServlet} — o
@@ -128,6 +144,8 @@ public class SegurancaAutoConfiguration {
                     if (publicosAdicionais.length > 0) {
                         req.requestMatchers(publicosAdicionais).permitAll();
                     }
+                    // Operacionais: qualquer perfil autenticado, sem matriz de papeis propria.
+                    req.requestMatchers(OPERACIONAIS_AUTENTICADOS).authenticated();
                     // Dentro deles, quem decide o perfil e o @PreAuthorize do metodo.
                     req.requestMatchers(caminhos.autenticadosComoArray()).authenticated();
                     // Caminho novo que ninguem liberou fica inacessivel.

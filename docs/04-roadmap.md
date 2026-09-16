@@ -350,7 +350,7 @@ O M10 assume esse teste como trabalho próprio, não remendo:
 **Escopo:** suíte ArchUnit no agendamento, `correlationId` ponta a ponta, Actuator, logs JSON no profile `docker`.
 
 **Notas técnicas obrigatórias**
-- Regras ArchUnit: `domain` não depende de `application` nem `infrastructure`; `domain` sem Spring/JPA/Jackson/Validation; classes `*UseCase` com exatamente um método público; entidades JPA só em `infrastructure.persistence`; controllers não injetam repositório, só caso de uso; nada de `System.out`.
+- Regras ArchUnit: `domain` não depende de `application` nem `infrastructure`; `domain` sem Spring/JPA/Jackson/Validation; classes `*UseCase` com exatamente um método público; entidades JPA só em `infrastructure.persistence`; controllers não injetam repositório, só caso de uso; nada de `System.out`. Única exceção nominal, reconciliada no ADR-007: o `JwtService` no `AutenticacaoController`, porque a emissão do token pertence à fronteira HTTP.
 - `correlationId`: **o filtro HTTP foi antecipado para o M03**, porque o `ProblemDetail` do §8 já exige o campo. Aqui resta a propagação: header AMQP no relay do outbox → MDC no consumidor, nos dois serviços. O filtro em si só precisa ser replicado no notificacao e no historico. O mesmo id tem que aparecer nos três logs para um único fluxo.
 - Actuator expõe `health`, `info`, `metrics`, `prometheus`. **Nunca** `env` ou `beans`.
 
@@ -359,13 +359,14 @@ O M10 assume esse teste como trabalho próprio, não remendo:
 ### M12 · `add-docker-compose-demo`
 **Capability:** `operacao-do-ambiente` · **Fecha:** RNF-07
 
-**Escopo:** Dockerfiles multi-stage, compose final com os 5 containers + Mailpit, profile `demo` com seed, Makefile.
+**Escopo:** Dockerfiles multi-stage, Compose final com seis containers (infraestrutura, três serviços e Mailpit), profile `demo`, roteiro e Makefile.
 
 **Notas técnicas obrigatórias**
 - Multi-stage com cache de dependências; runtime `eclipse-temurin:21-jre-alpine`; **usuário não-root**; `HEALTHCHECK` no `/actuator/health`.
 - `depends_on` com `condition: service_healthy`.
-- Seed demo com **uma consulta nas próximas 24h**, senão o lembrete D-1 não tem o que pegar na apresentação.
+- O roteiro cria a consulta pela API com o token do enfermeiro e a reaproveita de forma determinística enquanto ela permanecer nas próximas 24h; gravá-la só no banco não alimentaria histórico nem notificação.
 - `notificacao.sender=smtp` apontando para o Mailpit — e-mail chegando na tela vale mais que log.
+- O indicador `mail` é reabilitado somente no Compose, onde o Mailpit é dependência operacional.
 - Validar em execução limpa: `docker compose down -v && make demo`. Só está pronto se passar do zero.
 
 ---
