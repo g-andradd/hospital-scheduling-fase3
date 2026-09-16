@@ -30,3 +30,6 @@ Thumbs.db
 
 # Node (OpenSpec CLI)
 node_modules/
+
+# Entregas do Claude (Cowork)
+Claude outputs/

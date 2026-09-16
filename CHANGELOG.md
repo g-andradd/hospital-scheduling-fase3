@@ -4,6 +4,134 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 Versionamento semântico. Cada entrada corresponde a uma change do OpenSpec,
 arquivada em `openspec/changes/archive/`.
 
+## [1.0.0] — 2026-09-16
+
+Release final. Entrega a **operação e a verificação** do sistema: ambiente
+completo em um comando, cobertura e integração real garantidas pelo build,
+correlação ponta a ponta, collection Postman executável e a auditoria que
+percorre os 30 requisitos declarados. Fecha RNF-01 a RNF-10.
+
+### Adicionado
+
+- **`add-integration-tests-coverage`** (M10) — módulo técnico `quality-gates` e
+  os gates que faltavam: agregação JaCoCo com pisos que **reprovam o build**
+  (global 85%, `domain` e `application` 90%), guarda de infraestrutura real que
+  recusa mock de banco ou broker, e auditoria de execução que reprova seleção,
+  exclusão, omissão, tolerância a falha e relatório de outra sessão — um
+  `verify` verde com suíte omitida não passa. Fixture canônica compartilhada e
+  superfícies hostis derivadas do registro real de endpoints. Fecha RNF-04 e
+  RNF-06.
+- **`add-archunit-observability`** (M11) — suíte ArchUnit no
+  `agendamento-service`, em escopo de teste, que falha o build quando a direção
+  das camadas é cruzada ou o domínio importa framework. Correlação por
+  `correlationId` nos três serviços, do filtro HTTP ao outbox, ao consumidor da
+  notificação e ao projetor do histórico, com logs JSON e prova por testes
+  dirigidos. Fecha RNF-05 e RNF-08.
+- **`add-docker-compose-demo`** (M12) — imagem Docker multi-stage por serviço e
+  Compose único que sobe PostgreSQL, RabbitMQ, Mailpit e os três serviços, com
+  `make demo` idempotente que semeia a consulta de demonstração. Verificação
+  estrutural do ambiente no `quality-gates`, só com JDK, sobre Dockerfiles,
+  Compose e `.dockerignore`. Fecha RNF-07.
+- **`add-postman-documentation`** (M13) — collection Postman v2.1 e environment
+  local versionados, cobrindo a jornada REST, o GraphQL, autenticação,
+  autorização, lembrete e a família de erros, com execução real verificada por
+  Newman. README consolidado como porta de entrada, com flowchart e sequence
+  diagram, e os sete ADRs uniformizados num índice rastreável aos archives
+  OpenSpec.
+- **`finalize-audit-report`** (M14) — `scripts/auditoria.sh`, roteiro em Bash
+  somente-leitura que percorre os 30 requisitos de
+  `docs/02-especificacao-funcional.md`, confere **75 pares artefato + âncora** e
+  imprime `REQUISITO | STATUS | EVIDÊNCIA`. Mais `docs/relatorio-tecnico.md`,
+  com números que nomeiam o comando de origem, e `docs/roteiro-demo.md`,
+  cronometrado entre 5 e 8 minutos. Capability `operacao-do-ambiente`.
+
+### Decisões
+
+- **`OK` tem significado estreito.** Na auditoria de requisitos, `OK` afirma que
+  a evidência versionada existe e está ancorada no elemento declarado — nunca
+  que o comportamento foi reexecutado. Build, smoke e ambiente são evidência
+  separada.
+- **Evidência ancorada, e só ancorada.** Não existe verificador de mera
+  existência de arquivo. Citação do identificador em prosa ou nome de comando
+  não satisfaz requisito algum — é o falso positivo que um `grep RF-09`
+  produziria. O resultado por requisito é a conjunção de todas as suas âncoras.
+- **Inventário fechado.** A auditoria exige a sequência contínua RF-01…RF-20 e
+  RNF-01…RNF-10, única e na ordem. Documento reduzido, lacuna no meio ou número
+  fora da sequência reprovam.
+- **Auditoria estática e sem efeito.** O roteiro não sobe container, não alcança
+  banco nem broker, não executa o build, não depende de rede e não escreve
+  arquivo. Um controle de sentinelas no `PATH` prova que nenhum dos binários
+  proibidos é invocado.
+- **Duas auditorias, nomes parecidos, instrumentos distintos.** A de requisitos
+  é estática, em Bash, sobre os RF/RNF. A de execução roda dentro do
+  `mvn verify` e verifica que todas as suítes do reactor executaram
+  integralmente. Não são intercambiáveis.
+
+### Garantias estruturais
+
+- `AuditoriaDeRequisitosTest` executa o roteiro de verdade e exige inventário de
+  30, catálogo de 75 pares, ausência de entrada órfã e âncora que não seja o
+  próprio identificador. Oito negativos sintéticos cobrem requisito omitido,
+  sequência quebrada, identificador duplicado, entrada órfã, artefato ausente,
+  âncora removida, âncora faltante em requisito multiâncora e falso positivo.
+- `RoteiroDeApresentacaoTest` exige a janela de 5 a 8 minutos, duração por
+  bloco, pré-demonstração fora da soma, as cinco superfícies com endereço real,
+  credenciais idênticas às de `docs/02` §5, comandos existentes, alternativa por
+  bloco e nenhum comando que remova volumes. A restrição de janela do lembrete
+  é lida de `ServicoDeLembretes.JANELA`, no código de produção.
+- `RelatorioTecnicoTest` exige as oito seções na ordem, coluna de origem
+  preenchida em toda linha de número, links locais válidos e nenhum binário de
+  escritório versionado.
+- `LigacaoDosGatesTest`, `InfraestruturaRealTest`, `AuditoriaDeExecucaoTest` e
+  `VerificadorDeCoberturaTest` sustentam os gates do M10; `ColecaoPostmanTest`,
+  `DocumentacaoFinalTest` e `AmbienteDeDemonstracaoTest`, os do M12 e do M13.
+
+### Correções durante o desenvolvimento
+
+- **RNF-01 violado, encontrado pela própria auditoria.** A cláusula "senha nunca
+  em log" não tinha prova automatizada, e o teste escrito para fechar a lacuna
+  encontrou o requisito sendo violado: `LoginRequest` é um `record`, e o
+  `toString()` gerado inclui todos os componentes — com `org.springframework.web`
+  em `DEBUG`, o resolvedor de `@RequestBody` registrava a senha em claro de cada
+  login. Em `INFO`, o nível dos profiles de entrega, nada vazava, mas o requisito
+  diz **nunca**, e a garantia dependia do nível configurado. `toString()` passou
+  a omitir o valor, e `SenhaForaDosLogsIT` exige ausência da senha e do hash em
+  `DEBUG`. É a única alteração de produção do M14.
+- **Roteiro de demonstração fora da janela do lembrete.** O bloco de abertura
+  aceitava "uma consulta futura" qualquer, e o lembrete D-1 só alcança
+  `(agora, agora + 24h]`: seguir o roteiro ao pé da letra com data mais distante
+  fazia o bloco final devolver `lembretesEnviados: 0`, sem e-mail. O roteiro
+  passou a exigir a consulta dentro da janela, com a razão declarada na própria
+  linha.
+- **Cabeçalho do `scripts/auditoria.sh`.** Afirmava que carregar por `source` só
+  definia funções; o `set -Eeuo pipefail` no topo também aplica o modo estrito
+  ao shell chamador. O cabeçalho passou a descrever os dois modos como são, e o
+  modo estrito continua sendo o primeiro comando do arquivo.
+- **Hardening de produção descoberto pelas varreduras de entrada hostil do
+  M10**, no agendamento e no histórico, autorizado caso a caso.
+
+### Conhecido e adiado
+
+- **Entrega ao-menos-uma-vez** na publicação de eventos e na notificação. A
+  idempotência dos consumidores absorve a repetição; não há exactly-once.
+- **Variabilidade de contagem de cobertura entre execuções.** A cobertura de
+  linha global oscilou entre **97,27% e 97,37%** sem mudança de produção, nos
+  caminhos de falha, timeout e interrupção do `OutboxRelay` e nos tratadores de
+  erro em volta — executam conforme uma corrida contra o RabbitMQ real se
+  resolve. As três métricas com piso permaneceram muito acima deles em todas as
+  execuções. `BRANCH` é informativa e não tem piso.
+- **Alcance da prova de senha fora do log.** Cobre o que a JVM da suíte escreve
+  durante os dois logins, em `DEBUG` ou acima. Não alcança bibliotecas fora do
+  Logback, níveis ligados só em produção, nem outros DTOs que venham a carregar
+  segredo pelo `toString()` gerado.
+- **A auditoria de requisitos é estática.** `OK` não reexecuta comportamento.
+- **A sequência fechada engessa `docs/02` de propósito.** Um RF-21 quebra a
+  auditoria até script e catálogo serem atualizados.
+- **Polling do histórico na collection Postman.** A asserção do passo GraphQL
+  não tolera snapshot intermediário entre a projeção do evento anterior e a do
+  `CONFIRMADA`, o que pode reprovar uma execução completa de forma não
+  determinística. Registrado na revisão do M13 e não corrigido.
+
 ## [0.2.0] — 2026-09-11
 
 Segunda release. Entrega a **arquitetura assíncrona**: publicação transacional
