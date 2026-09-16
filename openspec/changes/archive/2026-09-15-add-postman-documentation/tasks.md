@@ -47,7 +47,7 @@
 - [x] 6.5 Depois do push autorizado pelo Gabriel, clonar a feature num `mktemp -d` validado sob `${TMPDIR:-/tmp}`, usar repositório Maven temporário vazio e executar somente `mvn -q -Dmaven.repo.local=<repo> clean verify`. Registrar SHA, código 0, contagens, zero skipped, coberturas e remover o temporário por trap seguro.
 - [x] 6.6 Montar o corpo do PR com: matriz dos 22 Scenarios, execução e reexecução Newman, contagens/cobertura, mutações, clone limpo, preservação de produção, decisões D4–D9 e riscos residuais. Conferir o conteúdo publicado e a renderização visual dos dois diagramas no GitHub antes de marcar esta task.
 - [x] 6.7 Após aprovação do PR e antes do merge, executar `/opsx:archive add-postman-documentation` na mesma feature branch. Confirmar a change fora da área ativa, presente no archive datado, delta promovido sem alterar Requirements anteriores, nenhuma outra capability tocada, `openspec validate --all --strict` verde e `openspec list` sem change ativa.
-- [ ] 6.8 Depois do push do archive, conferir no diff publicado do PR que collection, environment, documentação, gates, archive e spec promovida estão na mesma feature branch. Só então liberar o merge `--no-ff` em `develop`.
+- [x] 6.8 Depois do push do archive, conferir no diff publicado do PR que collection, environment, documentação, gates, archive e spec promovida estão na mesma feature branch. Só então liberar o merge `--no-ff` em `develop`.
 
 ### Matriz Scenario → evidência
 
