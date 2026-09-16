@@ -185,6 +185,16 @@ o aviso de alteração informa o novo horário. Um cancelamento aplicado entre a
 ainda pode receber o lembrete. Não há retry automático para `alteracao-concorrente`: o cliente
 relê e repete. As DLQs não têm reprocessamento automático. O GraphQL do histórico não pagina.
 
+**Variabilidade da cobertura entre execuções.** Os números da seção 6 são de **uma execução
+identificada**, o gate de medição do M14. Uma execução nova pode divergir em poucas linhas sem
+que nada de produção mude. A causa observada são os caminhos de falha, timeout e interrupção do
+`OutboxRelay` — as linhas do `catch (AmqpException | TimeoutException | ExecutionException)` e as
+do tratamento de `InterruptedException` — e os tratadores de erro em volta deles: só executam
+quando uma corrida contra o RabbitMQ real se resolve daquele jeito, e essa corrida não é
+determinística. No intervalo observado, a cobertura de linha global ficou **entre 97,27% e
+97,37%**. As três métricas com piso permaneceram muito acima deles em todas as execuções
+observadas. Não há aqui promessa de que os números se repitam exatamente.
+
 **Alcance da auditoria de requisitos.** Ela é **estática** e verifica artefato mais âncora
 literal. Não reexecuta teste, não mede cobertura e não sobe ambiente. Um requisito aprovado
 significa evidência presente e ancorada — a prova de comportamento é o build e o smoke.

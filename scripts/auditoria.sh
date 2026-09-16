@@ -34,7 +34,16 @@
 #      entrada no catalogo ou entrada orfa
 #   4  especificacao funcional ilegivel ou secao nao encontrada
 #
-# Carregado por `source`, so define as funcoes: o fluxo roda apenas quando executado.
+# Dois modos, e o segundo nao e inocuo:
+#   executado        — roda o fluxo completo e termina com um dos codigos acima;
+#   carregado com `source` — define as funcoes e NAO roda o fluxo, mas tambem aplica
+#                      `set -Eeuo pipefail` ao shell chamador, porque o modo estrito esta no
+#                      topo do arquivo, fora da guarda.
+#
+# O modo estrito fica no topo de proposito: o gate estrutural exige que ele seja o primeiro
+# comando do arquivo, e essa regra esta certa — um `set` escondido dentro da guarda deixaria
+# o proprio fluxo sem modo estrito ate a ultima linha. Quem carrega por `source` num shell
+# interativo herda o modo estrito e deve contar com isso.
 
 set -Eeuo pipefail
 

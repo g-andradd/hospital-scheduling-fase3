@@ -118,6 +118,17 @@ class RoteiroDeApresentacaoTest {
         DESTRUTIVOS.forEach(destrutivo -> assertThat(texto)
                 .as("o roteiro não pode mandar destruir o ambiente: %s", destrutivo)
                 .doesNotContain(destrutivo));
+
+        // A consulta do bloco 1 alimenta o lembrete do bloco final. Fora da janela de
+        // ServicoDeLembretes.JANELA, aquele bloco devolve lembretesEnviados: 0 e nenhum
+        // e-mail chega — a demonstracao quebra na frente da banca. O numero vem do codigo.
+        int horas = horasDaJanelaDoLembrete();
+        assertThat(blocoQueCriaAConsulta(texto).linha())
+                .as("o bloco que cria a consulta precisa declarar a janela de %d horas do lembrete D-1", horas)
+                .contains(horas + " horas");
+        assertThat(ler(RAIZ.resolve("scripts/demo.sh")))
+                .as("a janela declarada no roteiro precisa ser a que o roteiro de demonstração já pratica")
+                .contains("horario_da_consulta()");
     }
 
     @Test
@@ -188,6 +199,43 @@ class RoteiroDeApresentacaoTest {
 
         assertThat(violacoes(texto.replace(primeiro.linha(), semAlternativa(primeiro.linha()))))
                 .anySatisfy(v -> assertThat(v).contains("sem alternativa"));
+
+        String semJanela = texto.replace(horasDaJanelaDoLembrete() + " horas", "alguma data futura");
+        assertThat(violacoes(semJanela))
+                .anySatisfy(v -> assertThat(v).contains("janela do lembrete"));
+    }
+
+    // ------------------------------------------------------------------ janela do lembrete
+
+    private static final Path SERVICO_DE_LEMBRETES = RAIZ.resolve(
+            "notificacao-service/src/main/java/br/com/fiap/hospital/notificacao/lembrete/ServicoDeLembretes.java");
+
+    private static final Pattern JANELA_NO_CODIGO =
+            Pattern.compile("JANELA\\s*=\\s*Duration\\.ofHours\\((\\d+)\\)");
+
+    /**
+     * Horas da janela do lembrete D-1, lidas de {@code ServicoDeLembretes.JANELA}.
+     *
+     * <p>Lidas do codigo, e nao escritas aqui: um "24" a mao neste teste concordaria com um
+     * roteiro errado no dia em que a janela mudasse. O acoplamento e proposital.
+     */
+    static int horasDaJanelaDoLembrete() {
+        Matcher casamento = JANELA_NO_CODIGO.matcher(ler(SERVICO_DE_LEMBRETES));
+        if (!casamento.find()) {
+            throw new AssertionError("não foi possível ler a janela em " + SERVICO_DE_LEMBRETES);
+        }
+        return Integer.parseInt(casamento.group(1));
+    }
+
+    /** O bloco cronometrado que manda criar a consulta. */
+    static Bloco blocoQueCriaAConsulta(String texto) {
+        return blocosCronometrados(texto).stream()
+                .filter(bloco -> {
+                    String linha = bloco.linha().toLowerCase();
+                    return linha.contains("criar") && linha.contains("consulta");
+                })
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("nenhum bloco cronometrado cria a consulta"));
     }
 
     // ------------------------------------------------------------------ regras
@@ -235,6 +283,14 @@ class RoteiroDeApresentacaoTest {
         int total = blocos.stream().mapToInt(Bloco::segundos).sum();
         if (total < MINIMO_DE_MINUTOS * 60 || total > MAXIMO_DE_MINUTOS * 60) {
             violacoes.add("fora da janela de 5 a 8 minutos: " + comoMinutos(total));
+        }
+
+        String exigido = horasDaJanelaDoLembrete() + " horas";
+        if (blocos.stream().noneMatch(b -> b.linha().toLowerCase().contains("criar")
+                && b.linha().toLowerCase().contains("consulta"))) {
+            violacoes.add("nenhum bloco cronometrado cria a consulta");
+        } else if (!blocoQueCriaAConsulta(texto).linha().contains(exigido)) {
+            violacoes.add("bloco que cria a consulta não declara a janela do lembrete: " + exigido);
         }
         return List.copyOf(violacoes);
     }
